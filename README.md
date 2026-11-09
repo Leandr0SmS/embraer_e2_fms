@@ -11,6 +11,7 @@ Built with **React 19**, **TypeScript**, **Zustand**, **Tailwind CSS v4**, and *
 ## Key Features
 
 ### 1. Authentic MC-860 Hardware Bezel & 14×24 LCD Display
+
 - **Strict 14 Rows × 24 Columns Character Grid**:
   - **Line 1**: Page Title & Page Index (`1/3`)
   - **Lines 2–13**: 6 pairs of label/data lines aligned with Left (`1L–6L`) and Right (`1R–6R`) Line Select Keys (LSKs)
@@ -29,6 +30,7 @@ Built with **React 19**, **TypeScript**, **Zustand**, **Tailwind CSS v4**, and *
   - **Interactive Concentric Rotary Knob (`( )`)**: Adjusts `TO TEMP` and `FLEX TEMP` on `T/O DATASET MENU 1/1`
 
 ### 2. Complete Preflight & In-Flight Page Suite
+
 - **Power-Up & Initialization**:
   - `RADIO 1/1` (Cold & Dark power-up screen)
   - `NAV INDEX 1/2 & 2/2` (`IDENT`, `POS INIT`, `PATTERNS`, `CONVERSION`, `MAINTENANCE`, `CROSS LOAD`, `DEPARTURE`, `ARRIVAL`, `ALTN`, `WPT LIST`, `FLT SUM`, `POS SENSORS`, `FIX INFO`)
@@ -58,6 +60,7 @@ Built with **React 19**, **TypeScript**, **Zustand**, **Tailwind CSS v4**, and *
   - `HOLDING PATTERN`, `CUSTOM WAYPOINT` (`Lat/Lon`, `PBD`, `PBPB`, `Along-Track`), `FIX INFO`, and `RTE OFFSET`
 
 ### 3. Guided Preflight Trainer & Instructor Fault Injection
+
 - **10-Step Interactive Guided Preflight Sequence** with one-click **"Do Step"** auto-execution or manual MCDU entry
 - **Official Scenario Presets**:
   - **LATAM E195 Guia Rápido**: `SBGR → SBCF` (ALTN `SBGO`, RWY `10R`, SID `OMNI`, `FL400`, ZFW `40000 KG`, CG `29.0%`, `TO-3` FLEX `25°C`)
@@ -75,6 +78,7 @@ Built with **React 19**, **TypeScript**, **Zustand**, **Tailwind CSS v4**, and *
 ## Getting Started
 
 ### Prerequisites
+
 - **Node.js** `>= 18.x`
 - **npm** `>= 9.x`
 

@@ -19,14 +19,33 @@
   font-feature-settings: "zero" 1;
 }
 
-/* Honeywell NG FMS LCD Display Grid: Strict 14 rows x 24 columns */
+/* Honeywell NG FMS MC-860 Metallic Grey Bezel Shell */
+.mcdu-bezel-shell {
+  background: linear-gradient(180deg, #a6abb0 0%, #969ba1 50%, #8c9197 100%);
+  border: 2.5px solid #1a1d21;
+  box-shadow:
+    0 24px 60px rgba(0, 0, 0, 0.85),
+    inset 0 1px 1px rgba(255, 255, 255, 0.45),
+    inset 0 -2px 3px rgba(0, 0, 0, 0.35);
+}
+
+/* Inner recessed display frame (slightly darker grey bevel as in manual) */
+.mcdu-display-recess {
+  background: linear-gradient(180deg, #878c92 0%, #7d8288 100%);
+  border: 1.5px solid #5a5f65;
+  box-shadow:
+    inset 0 2px 5px rgba(0, 0, 0, 0.45),
+    0 1px 0 rgba(255, 255, 255, 0.35);
+}
+
+/* Honeywell NG FMS LCD Display Grid: Strict 14 rows x 24 columns, pure black aperture */
 .mcdu-lcd-grid {
   display: grid;
   grid-template-rows: repeat(14, minmax(0, 1fr));
-  background: radial-gradient(circle at 50% 50%, #071019 0%, #03060a 100%);
+  background-color: #000000;
   box-shadow:
-    inset 0 0 24px rgba(0, 0, 0, 0.95),
-    inset 0 0 4px rgba(56, 189, 248, 0.08);
+    inset 0 0 12px rgba(0, 0, 0, 1),
+    0 0 0 2px #111317;
 }
 
 .mcdu-lcd-row {
@@ -47,23 +66,41 @@
   user-select: none;
 }
 
-/* Tactile MC-860 Hardware Key Styling */
+/* Tactile MC-860 Matte Black Hardware Key Styling */
 .mcdu-key {
-  background: linear-gradient(180deg, #2c3543 0%, #1c222d 100%);
-  border: 1px solid #475569;
-  border-bottom: 3px solid #0f172a;
+  background: linear-gradient(180deg, #1e2024 0%, #0d0f12 100%);
+  border: 1.5px solid #2d3138;
+  border-bottom: 3px solid #050608;
   box-shadow:
-    0 2px 4px rgba(0, 0, 0, 0.6),
-    inset 0 1px 0 rgba(255, 255, 255, 0.14);
+    0 2px 3px rgba(0, 0, 0, 0.65),
+    inset 0 1px 0 rgba(255, 255, 255, 0.12);
   transition: transform 60ms ease, border-bottom-width 60ms ease, filter 60ms ease;
 }
 
 .mcdu-key:hover {
-  filter: brightness(1.12);
+  filter: brightness(1.18);
 }
 
 .mcdu-key:active {
   transform: translateY(1.5px);
   border-bottom-width: 1px;
-  filter: brightness(0.95);
+  filter: brightness(0.92);
+}
+
+/* LSK Button (Dark Charcoal with White Center Bar) */
+.mcdu-lsk-btn {
+  background: linear-gradient(180deg, #2b2e33 0%, #17191c 100%);
+  border: 1.5px solid #111315;
+  box-shadow:
+    0 2px 3px rgba(0, 0, 0, 0.6),
+    inset 0 1px 0 rgba(255, 255, 255, 0.18);
+  transition: transform 60ms ease, filter 60ms ease;
+}
+
+.mcdu-lsk-btn:hover {
+  filter: brightness(1.2);
+}
+
+.mcdu-lsk-btn:active {
+  transform: translateY(1px);
 }

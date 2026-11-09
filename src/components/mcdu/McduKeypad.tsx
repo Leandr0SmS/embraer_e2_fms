@@ -12,20 +12,25 @@ interface McduKeypadProps {
   knobHighlighted?: boolean;
 }
 
-const FUNCTION_ROW_1: Array<{ key: FmsFunctionKey; label: string }> = [
+const FUNCTION_ROW_1: Array<{ key: FmsFunctionKey; label: string; boxed?: boolean }> = [
   { key: 'PERF', label: 'PERF' },
   { key: 'NAV', label: 'NAV' },
-  { key: 'PREV', label: 'PREV' },
+  { key: 'PREV', label: 'PREV', boxed: true },
   { key: 'FPL', label: 'FPL' },
   { key: 'PROG', label: 'PROG' },
   { key: 'RTE', label: 'RTE' },
   { key: 'CB', label: 'CB' },
 ];
 
-const FUNCTION_ROW_2: Array<{ key: FmsFunctionKey; label: string; isBlank?: boolean }> = [
+const FUNCTION_ROW_2: Array<{
+  key: FmsFunctionKey;
+  label: string;
+  isBlank?: boolean;
+  boxed?: boolean;
+}> = [
   { key: 'MENU', label: 'MENU' },
   { key: 'DLK', label: 'DLK' },
-  { key: 'NEXT', label: 'NEXT' },
+  { key: 'NEXT', label: 'NEXT', boxed: true },
   { key: 'DIR', label: '', isBlank: true },
   { key: 'TRS', label: 'TRS' },
   { key: 'RADIO', label: 'RADIO' },
@@ -83,13 +88,13 @@ export const McduKeypad: React.FC<McduKeypadProps> = ({
   };
 
   return (
-    <div className="mt-3 space-y-2.5 select-none">
-      {/* Authentic 2-Row Function Key Matrix + BRT/DIM Rocker (Per LATAM Guia Rápido) */}
-      <div className="grid grid-cols-8 gap-1.5 bg-slate-900/95 p-2 rounded-md border border-slate-700/80 items-stretch">
-        <div className="col-span-7 space-y-1.5">
-          {/* Row 1: PERF NAV PREV FPL PROG RTE CB */}
-          <div className="grid grid-cols-7 gap-1.5">
-            {FUNCTION_ROW_1.map(({ key, label }) => {
+    <div className="mt-3 px-4 pb-1 space-y-3 select-none">
+      {/* Authentic 2-Row Function Key Matrix + BRT/DIM Rocker */}
+      <div className="grid grid-cols-8 gap-2 items-stretch">
+        <div className="col-span-7 space-y-2">
+          {/* Row 1: PERF NAV [PREV] FPL PROG RTE CB */}
+          <div className="grid grid-cols-7 gap-2">
+            {FUNCTION_ROW_1.map(({ key, label, boxed }) => {
               const isHighlighted = highlightedFunctionKey === key;
               return (
                 <button
@@ -97,21 +102,27 @@ export const McduKeypad: React.FC<McduKeypadProps> = ({
                   type="button"
                   onClick={() => onFunctionKey(key)}
                   data-testid={`fn-key-${key}`}
-                  className={`mcdu-key h-8 rounded text-[11px] font-bold tracking-wider text-slate-100 flex items-center justify-center cursor-pointer ${
+                  className={`mcdu-key h-8 rounded-[4px] text-[11px] font-bold tracking-wider text-white flex items-center justify-center cursor-pointer ${
                     isHighlighted
                       ? 'ring-2 ring-amber-400 animate-pulse text-amber-300'
                       : ''
                   }`}
                 >
-                  {label}
+                  {boxed ? (
+                    <span className="border border-white/85 px-1.5 py-0.5 rounded-[2px] leading-none">
+                      {label}
+                    </span>
+                  ) : (
+                    label
+                  )}
                 </button>
               );
             })}
           </div>
 
-          {/* Row 2: MENU DLK NEXT [Blank/DIR] TRS RADIO */}
-          <div className="grid grid-cols-7 gap-1.5">
-            {FUNCTION_ROW_2.map(({ key, label, isBlank }) => {
+          {/* Row 2: MENU DLK [NEXT] [Blank/DIR] TRS RADIO */}
+          <div className="grid grid-cols-7 gap-2">
+            {FUNCTION_ROW_2.map(({ key, label, isBlank, boxed }) => {
               const isHighlighted = highlightedFunctionKey === key;
               return (
                 <button
@@ -120,27 +131,33 @@ export const McduKeypad: React.FC<McduKeypadProps> = ({
                   onClick={() => onFunctionKey(key)}
                   title={isBlank ? 'Direct-To / Spare Function Key' : label}
                   data-testid={`fn-key-${key}`}
-                  className={`mcdu-key h-8 rounded text-[11px] font-bold tracking-wider text-slate-100 flex items-center justify-center cursor-pointer ${
+                  className={`mcdu-key h-8 rounded-[4px] text-[11px] font-bold tracking-wider text-white flex items-center justify-center cursor-pointer ${
                     isHighlighted
                       ? 'ring-2 ring-amber-400 animate-pulse text-amber-300'
                       : ''
                   }`}
                 >
-                  {label}
+                  {boxed ? (
+                    <span className="border border-white/85 px-1.5 py-0.5 rounded-[2px] leading-none">
+                      {label}
+                    </span>
+                  ) : (
+                    label
+                  )}
                 </button>
               );
             })}
-            {/* 7th slot spacer on row 2 */}
+            {/* 7th slot empty on row 2 */}
             <div className="h-8" />
           </div>
         </div>
 
         {/* Column 8: Vertical BRT / DIM Rocker Key */}
-        <div className="col-span-1 flex flex-col justify-between mcdu-key rounded overflow-hidden">
+        <div className="col-span-1 flex flex-col justify-between mcdu-key rounded-[4px] overflow-hidden">
           <button
             type="button"
             onClick={() => onBrightnessDelta?.(0.15)}
-            className="flex-1 text-[9px] font-bold text-slate-200 hover:bg-slate-700/60 flex items-center justify-center border-b border-slate-700/80 cursor-pointer"
+            className="flex-1 text-[9px] font-bold text-white hover:bg-white/10 flex items-center justify-center cursor-pointer"
             title="Increase Display Brightness (BRT)"
           >
             BRT
@@ -148,7 +165,7 @@ export const McduKeypad: React.FC<McduKeypadProps> = ({
           <button
             type="button"
             onClick={() => onBrightnessDelta?.(-0.15)}
-            className="flex-1 text-[9px] font-bold text-slate-200 hover:bg-slate-700/60 flex items-center justify-center cursor-pointer"
+            className="flex-1 text-[9px] font-bold text-white hover:bg-white/10 flex items-center justify-center cursor-pointer"
             title="Decrease Display Brightness (DIM)"
           >
             DIM
@@ -156,29 +173,25 @@ export const McduKeypad: React.FC<McduKeypadProps> = ({
         </div>
       </div>
 
-      {/* Lower Split Keypad: Left Alpha Matrix (A-Z, DEL, CLR) + Right Rotary Knob & Round Numeric Pad */}
-      <div className="grid grid-cols-12 gap-2.5 bg-slate-900/95 p-2.5 rounded-md border border-slate-700/80 items-end">
+      {/* Lower Split Keypad: Left Square Alpha Matrix (A-Z, DEL, CLR) + Right Rotary Knob & Round Numeric Pad */}
+      <div className="grid grid-cols-12 gap-3 items-end pt-0.5">
         {/* Left Alpha Matrix (7 columns wide, 6 keys per row) */}
-        <div className="col-span-7 space-y-1.5">
+        <div className="col-span-7 space-y-2">
           {ALPHA_ROWS.map((row, rIdx) => (
-            <div key={rIdx} className="grid grid-cols-6 gap-1.5">
+            <div key={rIdx} className="grid grid-cols-6 gap-2">
               {row.map((k, cIdx) => {
                 if (!k) {
-                  return <div key={`empty-${rIdx}-${cIdx}`} className="h-8" />;
+                  return <div key={`empty-${rIdx}-${cIdx}`} className="h-9" />;
                 }
-                const isAction = k === 'CLR' || k === 'DEL';
+                const isWordKey = k === 'CLR' || k === 'DEL';
                 return (
                   <button
                     key={k}
                     type="button"
                     onClick={() => handleAlphaClick(k)}
                     data-testid={`alpha-key-${k}`}
-                    className={`mcdu-key h-8 rounded text-[11px] font-bold flex items-center justify-center cursor-pointer ${
-                      k === 'CLR'
-                        ? 'text-amber-300 border-amber-500/40'
-                        : isAction
-                          ? 'text-cyan-300'
-                          : 'text-slate-100'
+                    className={`mcdu-key h-9 rounded-[4px] font-bold text-white flex items-center justify-center cursor-pointer ${
+                      isWordKey ? 'text-[11px] tracking-tight' : 'text-[15px]'
                     }`}
                   >
                     {k}
@@ -190,56 +203,61 @@ export const McduKeypad: React.FC<McduKeypadProps> = ({
         </div>
 
         {/* Right Side: Concentric Rotary Knob on Top + Round Numeric Pad Below (5 columns wide) */}
-        <div className="col-span-5 flex flex-col items-center justify-between space-y-2">
+        <div className="col-span-5 flex flex-col items-center justify-between space-y-2.5">
           {/* Concentric Rotary Data Entry Knob */}
-          <div className="w-full flex items-center justify-end pr-2">
+          <div className="w-full flex items-center justify-end pr-3">
             <div
               onWheel={handleKnobWheel}
-              title="Rotary Data Knob — Click - / + or scroll mouse wheel to adjust TO TEMP / FLEX TEMP"
-              className={`relative w-14 h-14 rounded-full bg-gradient-to-b from-slate-700 to-slate-950 border-2 border-slate-500 shadow-[0_4px_10px_rgba(0,0,0,0.85),inset_0_1px_2px_rgba(255,255,255,0.2)] flex items-center justify-center ${
+              title="Rotary Data Knob — Click ( / ) or scroll mouse wheel to adjust TO TEMP / FLEX TEMP"
+              className={`relative w-16 h-16 rounded-full bg-gradient-to-b from-[#d4d8dd] to-[#7a7f85] p-1.5 border border-[#3a3e44] shadow-[0_4px_10px_rgba(0,0,0,0.65)] flex items-center justify-center ${
                 knobHighlighted ? 'ring-2 ring-amber-400 animate-pulse' : ''
               }`}
             >
-              <div className="w-9 h-9 rounded-full bg-slate-900 border border-slate-600 shadow-inner flex items-center justify-between px-1">
-                <button
-                  type="button"
-                  onClick={() => onKnobRotate?.(-1)}
-                  data-testid="mcdu-knob-dec"
-                  className="text-[11px] font-bold text-slate-300 hover:text-cyan-300 px-0.5 cursor-pointer"
-                  title="Decrement value (Rotate Counter-Clockwise)"
-                >
-                  (
-                </button>
-                <button
-                  type="button"
-                  onClick={() => onKnobRotate?.(1)}
-                  data-testid="mcdu-knob-inc"
-                  className="text-[11px] font-bold text-slate-300 hover:text-cyan-300 px-0.5 cursor-pointer"
-                  title="Increment value (Rotate Clockwise)"
-                >
-                  )
-                </button>
+              <div className="w-full h-full rounded-full bg-gradient-to-b from-[#1f2226] to-[#0a0b0d] border-2 border-[#32363c] shadow-inner flex items-center justify-center">
+                <div className="w-9 h-9 rounded-full bg-[#15171a] border border-[#3d424a] shadow-[inset_0_2px_4px_rgba(0,0,0,0.9)] flex items-center justify-between px-1">
+                  <button
+                    type="button"
+                    onClick={() => onKnobRotate?.(-1)}
+                    data-testid="mcdu-knob-dec"
+                    className="text-[12px] font-bold text-neutral-400 hover:text-white px-0.5 cursor-pointer"
+                    title="Decrement value (Rotate Counter-Clockwise)"
+                  >
+                    (
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onKnobRotate?.(1)}
+                    data-testid="mcdu-knob-inc"
+                    className="text-[12px] font-bold text-neutral-400 hover:text-white px-0.5 cursor-pointer"
+                    title="Increment value (Rotate Clockwise)"
+                  >
+                    )
+                  </button>
+                </div>
               </div>
             </div>
           </div>
 
           {/* Round 4x4 Numeric & Symbol Pad */}
-          <div className="w-full space-y-1.5">
+          <div className="w-full space-y-2">
             {NUMERIC_ROWS.map((row, rIdx) => (
-              <div key={rIdx} className="grid grid-cols-4 gap-1.5">
+              <div key={rIdx} className="grid grid-cols-4 gap-2">
                 {row.map((k, cIdx) => {
                   if (!k) {
                     return <div key={`num-empty-${rIdx}-${cIdx}`} className="h-8" />;
                   }
+                  const isSmallLabel = k === '+/-' || k === 'SP';
                   return (
                     <button
                       key={k}
                       type="button"
                       onClick={() => handleNumericClick(k)}
                       data-testid={`num-key-${k}`}
-                      className="mcdu-key h-8 w-8 mx-auto rounded-full text-[11px] font-bold text-slate-100 flex items-center justify-center cursor-pointer"
+                      className={`mcdu-key h-8 w-8 mx-auto rounded-full font-bold text-white flex items-center justify-center cursor-pointer ${
+                        isSmallLabel ? 'text-[11px] tracking-tighter' : 'text-[14px]'
+                      }`}
                     >
-                      {k}
+                      {displayNumericLabel(k)}
                     </button>
                   );
                 })}
@@ -251,3 +269,10 @@ export const McduKeypad: React.FC<McduKeypadProps> = ({
     </div>
   );
 };
+
+function displayNumericLabel(k: string): React.ReactNode {
+  if (k === '.') {
+    return <span className="w-1.5 h-1.5 rounded-full bg-white inline-block" />;
+  }
+  return k;
+}
