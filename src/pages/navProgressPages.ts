@@ -34,6 +34,12 @@ export function buildNavIndexPage(state: FmsStoreState): McduScreenLayout {
           rightColor: 'WHITE',
         },
         {
+          left: '<CROSS PTS',
+          leftColor: 'WHITE',
+          right: 'FLT SUM>',
+          rightColor: 'WHITE',
+        },
+        {
           left: '<PATTERNS',
           leftColor: 'WHITE',
           right: 'HOLD>',
@@ -43,12 +49,6 @@ export function buildNavIndexPage(state: FmsStoreState): McduScreenLayout {
           left: '<DEPARTURE',
           leftColor: 'WHITE',
           right: 'ARRIVAL>',
-          rightColor: 'WHITE',
-        },
-        {
-          left: '<FLT SUM',
-          leftColor: 'WHITE',
-          right: 'INDEX 2/2>',
           rightColor: 'WHITE',
         },
       ],
@@ -68,26 +68,21 @@ export function buildNavIndexPage(state: FmsStoreState): McduScreenLayout {
       {
         left: '<NAV IDENT',
         leftColor: 'WHITE',
-        right: 'DATA LOAD>',
+        right: 'CONVERSION>',
+        rightColor: 'WHITE',
+      },
+      {
+        left: '<DATA LOAD',
+        leftColor: 'WHITE',
+        right: 'MAINTENANCE>',
         rightColor: 'WHITE',
       },
       {
         left: '<CLOSEST APT',
         leftColor: 'WHITE',
-        right: 'CROSS PTS>',
-        rightColor: 'WHITE',
-      },
-      {
-        left: '<CONVERSION',
-        leftColor: 'WHITE',
-        right: 'MAINTENANCE>',
-        rightColor: 'WHITE',
       },
       {},
-      {
-        left: '<INDEX 1/2',
-        leftColor: 'WHITE',
-      },
+      {},
     ],
   };
 }

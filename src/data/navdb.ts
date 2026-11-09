@@ -51,10 +51,14 @@ export interface NavCompanyRoute {
 
 export const AIRAC_METADATA = {
   cycle: 'AIRAC 2405',
-  activeDates: '16MAY-12JUN',
-  inactiveDates: '18APR-15MAY',
-  partNumber: 'DS31908001',
-  softwareLoad: 'LOAD 11.0',
+  date: '19MAY26',
+  utc: '0041z',
+  activeDates: '20APR 18MAY/23',
+  inactiveDates: '26JAN 23FEB/23>',
+  ndbVersion: 'NDB V2.08 23M',
+  partNumber: 'H3652304001',
+  subPartNumber: 'DS31908001',
+  softwareLoad: 'NG 1.0',
   aircraftModel: 'E195-E2',
   engines: 'PW1900G',
 };

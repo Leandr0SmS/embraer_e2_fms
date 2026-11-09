@@ -14,15 +14,23 @@ describe('Navigation Index, Progress & Operational Sub-Pages (Step 9)', () => {
     expect(nav1.title).toBe('NAV INDEX');
     expect(nav1.pageNumber).toBe('1/2');
     expect(nav1.rows[0].left).toBe('<DATALINK');
-    expect(nav1.rows[3].right).toBe('HOLD>');
-    expect(nav1.rows[4].left).toBe('<DEPARTURE');
-    expect(nav1.rows[4].right).toBe('ARRIVAL>');
+    expect(nav1.rows[3].left).toBe('<CROSS PTS');
+    expect(nav1.rows[3].right).toBe('FLT SUM>');
+    expect(nav1.rows[4].left).toBe('<PATTERNS');
+    expect(nav1.rows[4].right).toBe('HOLD>');
+    expect(nav1.rows[5].left).toBe('<DEPARTURE');
+    expect(nav1.rows[5].right).toBe('ARRIVAL>');
 
     store.pressFunctionKey('NEXT');
     const nav2 = getActiveScreenLayout(useFmsStore.getState());
     expect(nav2.pageNumber).toBe('2/2');
-    expect(nav2.rows[1].left).toBe('<NAV IDENT');
+    expect(nav2.rows[0].left).toBe('<POS SENSORS');
     expect(nav2.rows[0].right).toBe('POS INIT>');
+    expect(nav2.rows[1].left).toBe('<NAV IDENT');
+    expect(nav2.rows[1].right).toBe('CONVERSION>');
+    expect(nav2.rows[2].left).toBe('<DATA LOAD');
+    expect(nav2.rows[2].right).toBe('MAINTENANCE>');
+    expect(nav2.rows[3].left).toBe('<CLOSEST APT');
   });
 
   it('builds PROGRESS 1/3 with FROM (Yellow), TO (Magenta), DEST (Green), WIND, and GPS-D sensor', () => {

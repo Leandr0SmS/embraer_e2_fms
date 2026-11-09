@@ -688,7 +688,10 @@ export const useFmsStore = create<FmsStoreState>((set, get) => ({
     // =========================================================================
     if (state.activePage === 'NAV_IDENT') {
       if (lsk === '6R') {
-        set({ activePage: 'POS_INIT', subPageIndex: 1 });
+        set({
+          activePage: state.positionInitialized ? 'ACT_RTE' : 'POS_INIT',
+          subPageIndex: 1,
+        });
       } else if (lsk === '6L' || lsk === '5L') {
         set({ activePage: 'NAV_INDEX', subPageIndex: 2 });
       }
@@ -1680,13 +1683,13 @@ export const useFmsStore = create<FmsStoreState>((set, get) => ({
     if (state.activePage === 'NAV_INDEX') {
       if (state.subPageIndex === 1) {
         if (lsk === '3L') set({ activePage: 'ACTIVE_FLT_PLAN', subPageIndex: 1 });
-        else if (lsk === '4R') set({ activePage: 'HOLD', subPageIndex: 1 });
-        else if (lsk === '5L' || lsk === '6L') set({ activePage: 'DEPARTURE', subPageIndex: 1 });
-        else if (lsk === '5R' || lsk === '6R') set({ activePage: 'ARRIVAL', subPageIndex: 1 });
+        else if (lsk === '5R') set({ activePage: 'HOLD', subPageIndex: 1 });
+        else if (lsk === '6L') set({ activePage: 'DEPARTURE', subPageIndex: 1 });
+        else if (lsk === '6R') set({ activePage: 'ARRIVAL', subPageIndex: 1 });
       } else {
-        if (lsk === '1L' || lsk === '2L') set({ activePage: 'NAV_IDENT', subPageIndex: 1 });
-        else if (lsk === '1R' || lsk === '4R' || lsk === '5R') set({ activePage: 'POS_INIT', subPageIndex: 1 });
-        else if (lsk === '6L') set({ activePage: 'CONVERSION', subPageIndex: 1 });
+        if (lsk === '2L' || lsk === '1L') set({ activePage: 'NAV_IDENT', subPageIndex: 1 });
+        else if (lsk === '1R') set({ activePage: 'POS_INIT', subPageIndex: 1 });
+        else if (lsk === '2R') set({ activePage: 'CONVERSION', subPageIndex: 1 });
       }
       return;
     }

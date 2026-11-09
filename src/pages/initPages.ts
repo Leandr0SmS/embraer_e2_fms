@@ -69,52 +69,42 @@ export function buildNavIdentPage(state: FmsStoreState): McduScreenLayout {
     pageNumber: '1/1',
     rows: [
       {
-        labelLeft: 'MODEL',
-        labelRight: 'NAV DB',
-        left: AIRAC_METADATA.aircraftModel,
-        leftColor: 'GREEN',
-        right: AIRAC_METADATA.cycle,
-        rightColor: 'GREEN',
-      },
-      {
-        labelLeft: 'ENGINES',
-        labelRight: 'ACTIVE DATES',
-        left: AIRAC_METADATA.engines,
+        labelLeft: 'DATE',
+        labelRight: 'ACTIVE NDB',
+        left: AIRAC_METADATA.date,
         leftColor: 'GREEN',
         right: AIRAC_METADATA.activeDates,
         rightColor: 'GREEN',
       },
       {
-        labelLeft: 'SOFTWARE',
-        labelRight: 'INACTIVE DB',
-        left: AIRAC_METADATA.softwareLoad,
+        labelLeft: 'UTC',
+        labelRight: 'NON-ACTIVE NDB',
+        left: AIRAC_METADATA.utc,
         leftColor: 'GREEN',
         right: AIRAC_METADATA.inactiveDates,
-        rightColor: 'WHITE',
-        rightSize: 'SMALL',
+        rightColor: 'CYAN',
       },
       {
-        labelRight: 'DB PART NUMBER',
-        left: '<LDG IDENT',
-        leftColor: 'WHITE',
+        labelLeft: 'SW',
+        labelRight: AIRAC_METADATA.ndbVersion,
+        left: AIRAC_METADATA.softwareLoad,
+        leftColor: 'CYAN',
         right: AIRAC_METADATA.partNumber,
         rightColor: 'CYAN',
+      },
+      {
+        right: AIRAC_METADATA.subPartNumber,
+        rightColor: 'CYAN',
         rightSize: 'SMALL',
       },
       {
-        labelLeft: 'DATE',
-        labelRight: 'UTC',
-        left: '09NOV26',
-        leftColor: 'CYAN',
-        leftSize: 'SMALL',
-        right: '1214z',
-        rightColor: 'CYAN',
-        rightSize: 'SMALL',
+        left: '<LDG IDENT',
+        leftColor: 'WHITE',
       },
       {
         left: '<MAINTENANCE',
         leftColor: 'WHITE',
-        right: 'POS INIT>',
+        right: state.positionInitialized ? 'RTE>' : 'POS INIT>',
         rightColor: 'WHITE',
         rightReverse: !state.positionInitialized,
       },
@@ -123,48 +113,36 @@ export function buildNavIdentPage(state: FmsStoreState): McduScreenLayout {
 }
 
 export function buildPositionInitPage(state: FmsStoreState): McduScreenLayout {
+  const isLastLoaded = state.positionInitialized && state.posSource === 'LAST';
+  const isRefLoaded = state.positionInitialized && state.posSource === 'REF';
+  const isGpsLoaded = state.positionInitialized && state.posSource === 'GPS';
+
   return {
     title: 'POSITION INIT',
     pageNumber: '1/1',
     rows: [
       {
-        labelLeft: 'LAST POS',
+        labelLeft: isLastLoaded ? 'LAST POS (LOADED)' : 'LAST POS',
         left: 'S23°37.4 W046°39.4',
         leftColor: 'GREEN',
-        right:
-          state.positionInitialized && state.posSource === 'LAST'
-            ? '*LOADED'
-            : 'LOAD>',
-        rightColor:
-          state.positionInitialized && state.posSource === 'LAST'
-            ? 'CYAN'
-            : 'WHITE',
+        right: 'LOAD>',
+        rightColor: 'WHITE',
       },
       {
-        labelLeft: 'REF WPT',
-        left: `${state.flightPlan.origin} ARP`,
+        labelLeft: isRefLoaded
+          ? `${state.flightPlan.origin} REF WPT (LOADED)`
+          : `${state.flightPlan.origin} REF WPT`,
+        left: 'S23°37.6 W046°39.3',
         leftColor: 'GREEN',
-        right:
-          state.positionInitialized && state.posSource === 'REF'
-            ? '*LOADED'
-            : 'LOAD>',
-        rightColor:
-          state.positionInitialized && state.posSource === 'REF'
-            ? 'CYAN'
-            : 'WHITE',
+        right: 'LOAD>',
+        rightColor: 'WHITE',
       },
       {
-        labelLeft: 'GPS 1 POS',
+        labelLeft: isGpsLoaded ? 'GPS 1 POS (LOADED)' : 'GPS 1 POS',
         left: 'S23°37.3 W046°39.5',
         leftColor: 'GREEN',
-        right:
-          state.positionInitialized && state.posSource === 'GPS'
-            ? '*LOADED'
-            : 'LOAD>',
-        rightColor:
-          state.positionInitialized && state.posSource === 'GPS'
-            ? 'CYAN'
-            : 'WHITE',
+        right: 'LOAD>',
+        rightColor: 'WHITE',
       },
       {
         labelLeft: 'SET POS',
