@@ -60,4 +60,58 @@ describe('Navigation Index, Progress & Operational Sub-Pages (Step 9)', () => {
     expect(holdLayout.rows[1].left).toBe('240° / LEFT');
     expect(holdLayout.rows[2].left).toBe('2.0 MIN');
   });
+
+  it('adapts ACTIVE FLT PLAN bottom prompts by Flight Phase and walks through ARRIVAL and LANDING INIT / ROAAS / LANDING', () => {
+    const store = useFmsStore.getState();
+    store.navigateToPage('ACTIVE_FLT_PLAN', 1);
+
+    // Switch to CRUISE phase -> 6L <DES NOW, 6R ARRIVAL>
+    store.setFlightPhase('CRUISE');
+    const crzFpl = getActiveScreenLayout(useFmsStore.getState());
+    expect(crzFpl.rows[5].left).toBe('<DES NOW');
+    expect(crzFpl.rows[5].right).toBe('ARRIVAL>');
+
+    // Press 6R (ARRIVAL>) -> opens SBRJ ARRIVAL 1/1
+    useFmsStore.getState().pressLsk('6R');
+    expect(useFmsStore.getState().activePage).toBe('ARRIVAL');
+    const arrPage = getActiveScreenLayout(useFmsStore.getState());
+    expect(arrPage.title).toBe('SBRJ ARRIVAL');
+    expect(arrPage.rows[1].right).toBe('STAR>');
+
+    // Select STAR> (2R) -> SBRJ STARs 1/1 -> select BUSPA1A (1L) -> APPLY> (6R)
+    useFmsStore.getState().pressLsk('2R');
+    expect(useFmsStore.getState().activePage).toBe('ARRIVAL_STARS');
+    useFmsStore.getState().pressLsk('1L');
+    expect(useFmsStore.getState().activePage).toBe('ARRIVAL');
+    const arrSelected = getActiveScreenLayout(useFmsStore.getState());
+    expect(arrSelected.rows[1].right).toBe('BUSPA1A>');
+    expect(arrSelected.rows[5].right).toBe('APPLY>');
+    useFmsStore.getState().pressLsk('6R'); // APPLY>
+    expect(useFmsStore.getState().activePage).toBe('ACTIVE_FLT_PLAN');
+    useFmsStore.getState().pressLsk('6L'); // <ACTIVATE MOD
+
+    // Switch to APPROACH phase -> 6L <ARRIVAL, 6R LANDING>
+    useFmsStore.getState().setFlightPhase('APPROACH');
+    const apprFpl = getActiveScreenLayout(useFmsStore.getState());
+    expect(apprFpl.rows[5].left).toBe('<ARRIVAL');
+    expect(apprFpl.rows[5].right).toBe('LANDING>');
+
+    // Press 6R (LANDING>) -> opens LANDING INIT 1/1
+    useFmsStore.getState().pressLsk('6R');
+    expect(useFmsStore.getState().activePage).toBe('LANDING_INIT');
+    useFmsStore.getState().pressLsk('5L'); // <ROAAS
+    expect(useFmsStore.getState().activePage).toBe('ROAAS');
+    useFmsStore.getState().pressLsk('6L'); // <LANDING INIT
+    useFmsStore.getState().pressLsk('6L'); // <CONF INIT -> sets isCompPending
+    useFmsStore.getState().pressLsk('6R'); // LANDING>
+    expect(useFmsStore.getState().activePage).toBe('LANDING');
+
+    const ldgComp = getActiveScreenLayout(useFmsStore.getState());
+    expect(ldgComp.rows[0].leftReverse).toBe(true);
+    expect(ldgComp.rows[4].left).toBe('■ACCEPT COMP');
+    useFmsStore.getState().pressLsk('5L'); // Accept COMP speeds
+    const ldgAccepted = getActiveScreenLayout(useFmsStore.getState());
+    expect(ldgAccepted.rows[0].leftReverse).toBe(false);
+    expect(ldgAccepted.rows[4].left).toBe('*COMP ACCEPTED');
+  });
 });

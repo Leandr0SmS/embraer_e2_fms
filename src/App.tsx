@@ -9,21 +9,35 @@ import {
 import { InstructorFaultPanel } from './components/training/InstructorFaultPanel';
 import { ScratchpadReferenceModal } from './components/training/ScratchpadReferenceModal';
 import { BookOpen, Plane } from 'lucide-react';
-import { McduPageId } from './types/fms';
+import { FlightPhase, McduPageId } from './types/fms';
+
+const FLIGHT_PHASES: Array<{ id: FlightPhase; label: string }> = [
+  { id: 'PREFLIGHT', label: 'PREFLIGHT' },
+  { id: 'TAKEOFF', label: 'TAKEOFF' },
+  { id: 'CLIMB', label: 'CLIMB' },
+  { id: 'CRUISE', label: 'CRUISE' },
+  { id: 'DESCENT', label: 'DESCENT' },
+  { id: 'APPROACH', label: 'APPROACH' },
+  { id: 'MISSED_APPROACH', label: 'MISSED APPR' },
+];
 
 const QUICK_PAGES: Array<{ id: McduPageId; sub: number; label: string }> = [
   { id: 'RADIO', sub: 1, label: 'RADIO' },
   { id: 'NAV_IDENT', sub: 1, label: 'NAV IDENT' },
   { id: 'POS_INIT', sub: 1, label: 'POS INIT' },
   { id: 'ACT_RTE', sub: 1, label: 'ACT RTE 1/3' },
+  { id: 'DEPARTURE', sub: 1, label: 'DEPARTURE' },
   { id: 'ACT_RTE', sub: 2, label: 'ACT RTE 2/3' },
   { id: 'PERF_INIT', sub: 1, label: 'PERF INIT 1/3' },
   { id: 'PERF_INIT', sub: 2, label: 'PERF INIT 2/3' },
   { id: 'PERF_INIT', sub: 3, label: 'PERF INIT 3/3' },
   { id: 'TO_DATASET', sub: 1, label: 'T/O DATASET' },
   { id: 'TAKEOFF_INIT', sub: 1, label: 'TAKEOFF 1/2' },
-  { id: 'TAKEOFF_VSPEEDS', sub: 1, label: 'VSPEEDS 2/2' },
+  { id: 'TAKEOFF_VSPEEDS', sub: 1, label: 'TAKEOFF 1/1' },
+  { id: 'DEPARTURE_LIMIT', sub: 1, label: 'DEP LIMIT' },
   { id: 'ACTIVE_FLT_PLAN', sub: 1, label: 'FLT PLAN' },
+  { id: 'ARRIVAL', sub: 1, label: 'ARRIVAL' },
+  { id: 'LANDING_INIT', sub: 1, label: 'LDG INIT' },
   { id: 'PROGRESS', sub: 1, label: 'PROGRESS' },
   { id: 'HOLD', sub: 1, label: 'HOLD' },
 ];
@@ -70,8 +84,30 @@ export default function App() {
         </div>
       </header>
 
-      {/* Quick Page Jump Strip */}
-      <div className="border-b border-slate-900 bg-slate-950/90 px-4 py-1.5 overflow-x-auto">
+      {/* Quick Page Jump Strip & Flight Phase Selector */}
+      <div className="border-b border-slate-900 bg-slate-950/90 px-4 py-1.5 space-y-1.5 overflow-x-auto">
+        <div className="max-w-7xl mx-auto flex items-center gap-1.5">
+          <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-400 mr-1 shrink-0">
+            Flight Phase:
+          </span>
+          {FLIGHT_PHASES.map((fp) => {
+            const isActive = state.flightPhase === fp.id;
+            return (
+              <button
+                key={fp.id}
+                type="button"
+                onClick={() => state.setFlightPhase(fp.id)}
+                className={`px-2 py-0.5 rounded text-[10px] font-mcdu shrink-0 transition-colors cursor-pointer ${
+                  isActive
+                    ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/60 font-bold'
+                    : 'bg-slate-900 text-slate-400 hover:text-slate-200 border border-slate-800'
+                }`}
+              >
+                {fp.label}
+              </button>
+            );
+          })}
+        </div>
         <div className="max-w-7xl mx-auto flex items-center gap-1.5">
           <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mr-1 shrink-0">
             Quick Page:

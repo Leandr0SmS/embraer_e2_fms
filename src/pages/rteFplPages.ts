@@ -495,13 +495,25 @@ export function buildActiveFltPlanPage(state: FmsStoreState): McduScreenLayout {
         : 'GREEN';
 
     const altFuel = formatWaypointAltFuel(wpt);
-    const dtgText = `${wpt.predictions.etaUtc} ${Math.round(wpt.predictions.dtgNm)}NM`;
+    const brg = wpt.predictions.bearingDeg ?? 93;
+    const dtgText = isFrom
+      ? `${wpt.predictions.etaUtc}`
+      : `${String(brg).padStart(3, '0')}° ${Math.round(wpt.predictions.dtgNm)}NM`;
+
+    const phaseSpdLabel =
+      state.flightPhase === 'CRUISE'
+        ? 'CRZ SPD'
+        : state.flightPhase === 'DESCENT'
+          ? 'DES SPD'
+          : state.flightPhase === 'APPROACH'
+            ? 'APPR SPD'
+            : 'CLB SPD';
 
     wptRows.push({
       labelLeft: roleLabel,
       labelLeftColor: isFrom ? 'YELLOW' : isTo ? 'MAGENTA' : 'CYAN',
-      labelCenter: 'ETA   DTG',
-      labelRight: 'ALT / EFOB',
+      labelCenter: isFrom ? 'UTC' : 'BRG   DTG',
+      labelRight: isFrom ? phaseSpdLabel : 'ALT / EFOB',
       left: state.directToMode && !isFrom ? `*${wpt.ident}` : wpt.ident,
       leftColor: wptColor,
       leftSize: 'LARGE',
@@ -516,19 +528,67 @@ export function buildActiveFltPlanPage(state: FmsStoreState): McduScreenLayout {
   }
 
   const destWpt = plan.waypoints[plan.waypoints.length - 1];
-  const summaryRow: McduLskRow = destWpt
-    ? {
-        labelLeft: 'DEST SUMMARY',
-        labelRight: 'TOTAL DTG / EFOB',
-        left: plan.destination,
-        leftColor: 'GREEN',
-        center: destWpt.predictions.etaUtc,
-        centerColor: 'CYAN',
-        right: `${destWpt.predictions.cumulativeDtgNm}NM ${destWpt.predictions.efobKg.toFixed(1)}G`,
-        rightColor: 'CYAN',
-        rightSize: 'SMALL',
-      }
-    : {};
+  const summaryRow: McduLskRow =
+    state.flightPhase === 'MISSED_APPROACH'
+      ? {
+          left: '<MISSED APPR',
+          leftColor: 'WHITE',
+          right: 'ALTN FPL>',
+          rightColor: 'WHITE',
+        }
+      : destWpt
+        ? {
+            labelLeft: 'DEST SUMMARY',
+            labelRight: 'TOTAL DTG / EFOB',
+            left: plan.destination,
+            leftColor: 'GREEN',
+            center: destWpt.predictions.etaUtc,
+            centerColor: 'CYAN',
+            right: `${destWpt.predictions.cumulativeDtgNm}NM ${destWpt.predictions.efobKg.toFixed(1)}G`,
+            rightColor: 'CYAN',
+            rightSize: 'SMALL',
+          }
+        : {};
+
+  let phaseBottomRow: McduLskRow = {
+    left: '<PERF DATA',
+    leftColor: 'WHITE',
+    right: 'PROGRESS>',
+    rightColor: 'WHITE',
+  };
+
+  if (state.flightPhase === 'CLIMB') {
+    phaseBottomRow = {
+      left: '<CLB DIR',
+      leftColor: 'WHITE',
+      right: 'PERF PLAN>',
+      rightColor: 'WHITE',
+    };
+  } else if (state.flightPhase === 'CRUISE') {
+    phaseBottomRow = {
+      left: '<DES NOW',
+      leftColor: 'WHITE',
+      right: 'ARRIVAL>',
+      rightColor: 'WHITE',
+    };
+  } else if (state.flightPhase === 'DESCENT') {
+    phaseBottomRow = {
+      left: '<DES DIR',
+      leftColor: 'WHITE',
+      right: 'ARRIVAL>',
+      rightColor: 'WHITE',
+    };
+  } else if (
+    state.flightPhase === 'APPROACH' ||
+    state.flightPhase === 'MISSED_APPROACH'
+  ) {
+    phaseBottomRow = {
+      left: '<ARRIVAL',
+      leftColor: 'WHITE',
+      right: 'LANDING>',
+      rightColor: 'WHITE',
+    };
+  }
 
   const bottomRow: McduLskRow = isMod
     ? {
@@ -538,12 +598,7 @@ export function buildActiveFltPlanPage(state: FmsStoreState): McduScreenLayout {
         right: 'CANCEL MOD>',
         rightColor: 'WHITE',
       }
-    : {
-        left: '<PERF DATA',
-        leftColor: 'WHITE',
-        right: 'PROGRESS>',
-        rightColor: 'WHITE',
-      };
+    : phaseBottomRow;
 
   return {
     title: state.directToMode

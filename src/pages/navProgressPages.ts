@@ -7,7 +7,7 @@
 
 import { NAV_AIRPORTS } from '../data/navdb';
 import { FmsStoreState } from '../store/useFmsStore';
-import { McduScreenLayout } from '../types/fms';
+import { McduLskRow, McduScreenLayout } from '../types/fms';
 
 export function buildNavIndexPage(state: FmsStoreState): McduScreenLayout {
   if (state.subPageIndex === 1) {
@@ -366,17 +366,97 @@ export function buildOperationalSubPage(state: FmsStoreState): McduScreenLayout 
       };
     }
 
-    case 'LANDING': {
-      const ls = state.speeds.landingSpeeds;
+    case 'LANDING_INIT': {
+      const gwKg = Math.round((state.weights.grossWeight ?? 51.8) * 1000);
+      const estLdgKg = Math.max(32000, gwKg - 3200);
+      const baro = state.atmosphere.altimeter;
+      const baroStr =
+        baro.unit === 'INHG' ? baro.value.toFixed(2) : `${baro.value}`;
+      const sw = state.atmosphere.surfaceWind;
+      const swStr = `${String(sw.direction).padStart(3, '0')}°/${String(sw.speed).padStart(2, '0')}`;
+      const oatC = state.atmosphere.tempCompensation.landingOatC ?? 24;
+      const isCompPending = Boolean(state.speeds.landingSpeeds.isCompPending);
+
       return {
         title: 'LANDING INIT',
+        pageNumber: '1/1',
+        rows: [
+          {
+            labelLeft: 'LDG FLAP',
+            labelRight: 'EST LDG WT',
+            left: 'FULL>',
+            leftColor: 'GREEN',
+            right: `${estLdgKg}KG`,
+            rightColor: 'GREEN',
+          },
+          {
+            labelLeft: 'ICE PROT',
+            labelRight: 'QNH',
+            left: '<-OFF/ON',
+            leftColor: 'GREEN',
+            right: baroStr,
+            rightColor: 'GREEN',
+          },
+          {
+            labelLeft: 'WIND',
+            labelRight: 'OAT',
+            left: swStr,
+            leftColor: 'GREEN',
+            right: `+${oatC}°C`,
+            rightColor: 'GREEN',
+          },
+          {},
+          {
+            left: `<ROAAS (${state.roaasEnabled ? 'ON' : 'OFF'})`,
+            leftColor: 'WHITE',
+            right: 'SEND REQST>',
+            rightColor: 'WHITE',
+          },
+          {
+            left: isCompPending ? '*INIT CONFIRMED' : '<CONF INIT',
+            leftColor: isCompPending ? 'CYAN' : 'WHITE',
+            leftReverse: !isCompPending,
+            right: 'LANDING>',
+            rightColor: 'WHITE',
+          },
+        ],
+      };
+    }
+
+    case 'ROAAS':
+      return {
+        title: 'ROAAS',
+        pageNumber: '1/1',
+        rows: [
+          {
+            labelLeft: 'ROAAS MODE',
+            left: state.roaasEnabled ? '<-ON/OFF' : 'ON/<-OFF',
+            leftColor: 'GREEN',
+          },
+          {},
+          {},
+          {},
+          {},
+          {
+            left: '<LANDING INIT',
+            leftColor: 'WHITE',
+          },
+        ],
+      };
+
+    case 'LANDING': {
+      const ls = state.speeds.landingSpeeds;
+      const isComp = Boolean(ls.isCompPending);
+      return {
+        title: 'LANDING',
         pageNumber: '1/1',
         rows: [
           {
             labelLeft: 'VREF',
             labelRight: 'LDG FLAP',
             left: `${ls.vref ?? 126} KT`,
-            leftColor: 'GREEN',
+            leftColor: isComp ? 'WHITE' : 'GREEN',
+            leftReverse: isComp,
             right: 'FULL>',
             rightColor: 'GREEN',
           },
@@ -384,15 +464,17 @@ export function buildOperationalSubPage(state: FmsStoreState): McduScreenLayout 
             labelLeft: 'VAPP',
             labelRight: 'DEST RWY',
             left: `${ls.vapp ?? 131} KT`,
-            leftColor: 'GREEN',
-            right: `${state.flightPlan.destination} 02R`,
+            leftColor: isComp ? 'WHITE' : 'GREEN',
+            leftReverse: isComp,
+            right: `${state.flightPlan.destination} ${state.flightPlan.arrivalRunway ?? '02R'}`,
             rightColor: 'GREEN',
           },
           {
             labelLeft: 'VAC',
             labelRight: 'GA SPD',
             left: `${ls.vac ?? 138} KT`,
-            leftColor: 'GREEN',
+            leftColor: isComp ? 'WHITE' : 'GREEN',
+            leftReverse: isComp,
             right: `${ls.gaSpeed ?? 145} KT`,
             rightColor: 'GREEN',
           },
@@ -404,9 +486,13 @@ export function buildOperationalSubPage(state: FmsStoreState): McduScreenLayout 
             right: 'OFF>',
             rightColor: 'WHITE',
           },
-          {},
           {
-            left: '<PERF INDEX',
+            left: isComp ? '■ACCEPT COMP' : '*COMP ACCEPTED',
+            leftColor: isComp ? 'WHITE' : 'CYAN',
+            leftReverse: isComp,
+          },
+          {
+            left: '<LANDING INIT',
             leftColor: 'WHITE',
             right: 'FLT PLAN>',
             rightColor: 'WHITE',
@@ -414,6 +500,70 @@ export function buildOperationalSubPage(state: FmsStoreState): McduScreenLayout 
         ],
       };
     }
+
+    case 'MISSED_APPROACH':
+      return {
+        title: 'MISSED APPROACH',
+        pageNumber: '1/1',
+        rows: [
+          {
+            labelLeft: 'DEST',
+            labelRight: 'EO ACCEL ALT',
+            left: state.flightPlan.destination,
+            leftColor: 'GREEN',
+            right: '1800FT',
+            rightColor: 'GREEN',
+          },
+          {
+            labelLeft: 'HOLD AT',
+            left: state.flightPlan.alternateVia ?? 'GEP',
+            leftColor: 'GREEN',
+          },
+          {},
+          {},
+          {},
+          {
+            left: '<FLT PLAN',
+            leftColor: 'WHITE',
+            right: 'ALTN FPL>',
+            rightColor: 'WHITE',
+          },
+        ],
+      };
+
+    case 'ALTERNATE_FPL':
+      return {
+        title: 'ALTERNATE FPL',
+        pageNumber: '1/1',
+        rows: [
+          {
+            labelLeft: 'ALTN DEST',
+            labelRight: 'VIA',
+            left: state.flightPlan.alternate ?? 'SBGL',
+            leftColor: 'GREEN',
+            right: state.flightPlan.alternateVia ?? 'DIRECT',
+            rightColor: 'GREEN',
+          },
+          {
+            labelLeft: 'DTG',
+            labelRight: 'ALTN FUEL',
+            left: '135NM',
+            leftColor: 'CYAN',
+            right: `${Math.round((state.weights.alternateFuel ?? 1.2) * 1000)}KG`,
+            rightColor: 'CYAN',
+          },
+          {},
+          {},
+          {},
+          {
+            left: '<FLT PLAN',
+            leftColor: 'WHITE',
+            right: 'ACTIVATE ALTN>',
+            rightColor: 'WHITE',
+            rightReverse: true,
+          },
+        ],
+      };
 
     case 'HOLD': {
       const hc = state.holdConfig;
@@ -505,36 +655,172 @@ export function buildOperationalSubPage(state: FmsStoreState): McduScreenLayout 
       };
     }
 
-    case 'ARRIVAL': {
-      const apt = NAV_AIRPORTS[state.flightPlan.destination] ?? NAV_AIRPORTS.SBRJ;
-      const stars = Object.keys(apt.stars);
+    case 'ARRIVAL':
+    case 'ARRIVAL_RUNWAYS':
+    case 'ARRIVAL_STARS':
+    case 'ARRIVAL_STAR_TRANS':
+    case 'ARRIVAL_APPROACH':
+    case 'ARRIVAL_APPR_TRANS': {
+      const plan = state.modFlightPlan ?? state.flightPlan;
+      const apt = NAV_AIRPORTS[plan.destination] ?? NAV_AIRPORTS.KMSP ?? NAV_AIRPORTS.SBRJ;
+      const pa = state.pendingArrival;
+      const hasPending = Boolean(
+        pa.runway || pa.star || pa.starTransition || pa.approach || pa.approachTransition
+      );
+
+      if (state.activePage === 'ARRIVAL_RUNWAYS') {
+        const rows: McduLskRow[] = [];
+        for (let i = 0; i < 5; i++) {
+          const rL = apt.runways[i];
+          const rR = apt.runways[i + 5];
+          rows.push({
+            left: rL ? `<RW${rL.ident}` : undefined,
+            leftColor: 'GREEN',
+            right: rR ? `RW${rR.ident}>` : undefined,
+            rightColor: 'GREEN',
+          });
+        }
+        rows.push({ right: 'ARRIVAL>', rightColor: 'WHITE' });
+        return {
+          title: `${apt.icao} RUNWAYS`,
+          pageNumber: '1/1',
+          rows: [rows[0] ?? {}, rows[1] ?? {}, rows[2] ?? {}, rows[3] ?? {}, rows[4] ?? {}, rows[5] ?? {}],
+        };
+      }
+
+      if (state.activePage === 'ARRIVAL_STARS') {
+        const stars = Object.keys(apt.stars);
+        const rows: McduLskRow[] = [];
+        for (let i = 0; i < 5; i++) {
+          rows.push({
+            left: stars[i] ? `<${stars[i]}` : undefined,
+            leftColor: 'GREEN',
+          });
+        }
+        rows.push({ right: 'ARRIVAL>', rightColor: 'WHITE', rightReverse: true });
+        return {
+          title: `${apt.icao} STARs`,
+          pageNumber: '1/1',
+          rows: [rows[0] ?? {}, rows[1] ?? {}, rows[2] ?? {}, rows[3] ?? {}, rows[4] ?? {}, rows[5] ?? {}],
+        };
+      }
+
+      if (state.activePage === 'ARRIVAL_STAR_TRANS') {
+        const selStar = pa.star ?? plan.star ?? Object.keys(apt.stars)[0] ?? '';
+        const transList = Object.keys(apt.starTransitions?.[selStar] ?? {});
+        const rows: McduLskRow[] = [];
+        for (let i = 0; i < 5; i++) {
+          rows.push({
+            left: transList[i] ? `<${transList[i]}` : undefined,
+            leftColor: 'GREEN',
+            right: i === 0 ? `${selStar}>` : undefined,
+            rightColor: 'CYAN',
+          });
+        }
+        rows.push({ right: 'ARRIVAL>', rightColor: 'WHITE', rightReverse: true });
+        return {
+          title: `${apt.icao} STAR TRANS`,
+          pageNumber: '1/1',
+          rows: [rows[0] ?? {}, rows[1] ?? {}, rows[2] ?? {}, rows[3] ?? {}, rows[4] ?? {}, rows[5] ?? {}],
+        };
+      }
+
+      if (state.activePage === 'ARRIVAL_APPROACH') {
+        const apprs = apt.approaches ?? ['ILS 30L', 'RNAV 30L'];
+        const rows: McduLskRow[] = [];
+        for (let i = 0; i < 5; i++) {
+          rows.push({
+            left: apprs[i] ? `<${apprs[i]}` : undefined,
+            leftColor: 'GREEN',
+          });
+        }
+        rows.push({ right: 'ARRIVAL>', rightColor: 'WHITE', rightReverse: true });
+        return {
+          title: `${apt.icao} APPROACHES`,
+          pageNumber: '1/1',
+          rows: [rows[0] ?? {}, rows[1] ?? {}, rows[2] ?? {}, rows[3] ?? {}, rows[4] ?? {}, rows[5] ?? {}],
+        };
+      }
+
+      if (state.activePage === 'ARRIVAL_APPR_TRANS') {
+        const selAppr = pa.approach ?? plan.approach ?? (apt.approaches?.[0] ?? 'ILS 30L');
+        const transList = Object.keys(apt.approachTransitions?.[selAppr] ?? {});
+        const rows: McduLskRow[] = [];
+        for (let i = 0; i < 5; i++) {
+          rows.push({
+            left: transList[i] ? `<${transList[i]}` : undefined,
+            leftColor: 'GREEN',
+            right: i === 0 ? `${selAppr}>` : undefined,
+            rightColor: 'CYAN',
+          });
+        }
+        rows.push({ right: 'ARRIVAL>', rightColor: 'WHITE', rightReverse: true });
+        return {
+          title: `${apt.icao} APPR TRANS`,
+          pageNumber: '1/1',
+          rows: [rows[0] ?? {}, rows[1] ?? {}, rows[2] ?? {}, rows[3] ?? {}, rows[4] ?? {}, rows[5] ?? {}],
+        };
+      }
+
       return {
         title: `${apt.icao} ARRIVAL`,
         pageNumber: '1/1',
         rows: [
           {
-            labelLeft: 'APPROACH',
-            labelRight: 'STARS',
-            left: `*${state.flightPlan.approach ?? 'RNP 02R'}`,
+            labelLeft: 'RUNWAY',
+            labelCenter: 'ACTIVE  SELECTED',
+            labelRight: 'RUNWAY',
+            left: plan.arrivalRunway ? `RW${plan.arrivalRunway}` : '----',
             leftColor: 'GREEN',
-            right: `*${state.flightPlan.star ?? stars[0] ?? 'BUSPA1A'}`,
-            rightColor: 'GREEN',
+            right: pa.runway ? `RW${pa.runway}>` : 'RUNWAY>',
+            rightColor: pa.runway ? 'CYAN' : 'WHITE',
           },
           {
-            left: 'RNP 20L',
-            leftColor: 'WHITE',
-            right: 'NONE',
-            rightColor: 'WHITE',
+            labelLeft: 'STAR',
+            labelRight: 'STAR',
+            left: plan.star || '------',
+            leftColor: 'GREEN',
+            right: pa.star ? `${pa.star}>` : 'STAR>',
+            rightColor: pa.star ? 'CYAN' : 'WHITE',
           },
-          {},
-          {},
-          {},
           {
-            left: '<NAV INDEX',
-            leftColor: 'WHITE',
-            right: 'FLT PLAN>',
-            rightColor: 'WHITE',
+            labelLeft: 'TRANSITION',
+            labelRight: 'TRANSITION',
+            left: plan.starTransition || '------',
+            leftColor: 'GREEN',
+            right: pa.starTransition ? `${pa.starTransition}>` : 'TRANS>',
+            rightColor: pa.starTransition ? 'CYAN' : 'WHITE',
           },
+          {
+            labelLeft: 'APPROACH',
+            labelRight: 'APPROACH',
+            left: plan.approach || '------',
+            leftColor: 'GREEN',
+            right: pa.approach ? `${pa.approach}>` : 'APPROACH>',
+            rightColor: pa.approach ? 'CYAN' : 'WHITE',
+          },
+          {
+            labelLeft: 'TRANSITION',
+            labelRight: 'TRANSITION',
+            left: plan.approachTransition || '------',
+            leftColor: 'GREEN',
+            right: pa.approachTransition ? `${pa.approachTransition}>` : 'TRANS>',
+            rightColor: pa.approachTransition ? 'CYAN' : 'WHITE',
+          },
+          hasPending
+            ? {
+                left: '<CLEAR SEL',
+                leftColor: 'WHITE',
+                right: 'APPLY>',
+                rightColor: 'WHITE',
+                rightReverse: true,
+              }
+            : {
+                left: '<NAV INDEX',
+                leftColor: 'WHITE',
+                right: 'FLT PLAN>',
+                rightColor: 'WHITE',
+              },
         ],
       };
     }

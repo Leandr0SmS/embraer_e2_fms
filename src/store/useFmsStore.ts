@@ -6,6 +6,7 @@
 
 import { create } from 'zustand';
 import {
+  FlightPhase,
   FmsAltitudeData,
   FmsAtmosphericData,
   FmsFlightPlan,
@@ -291,8 +292,17 @@ export interface FmsStoreState {
     sid: string | null;
     transition: string | null;
   };
+  pendingArrival: {
+    runway: string | null;
+    star: string | null;
+    starTransition: string | null;
+    approach: string | null;
+    approachTransition: string | null;
+  };
   pendingAirway: string | null;
 
+  flightPhase: FlightPhase;
+  roaasEnabled: boolean;
   toDataset: ToDatasetData;
   activeKnobField: 'TO_TEMP' | 'FLEX_TEMP' | null;
 
@@ -313,6 +323,7 @@ export interface FmsStoreState {
   navigateToPage: (page: McduPageId, subPage?: number) => void;
   pressLsk: (lsk: LskId) => void;
   rotateKnob: (delta: 1 | -1) => void;
+  setFlightPhase: (phase: FlightPhase) => void;
 
   // Direct Helper Actions & Training Controls
   computeToldVSpeeds: () => void;
@@ -461,8 +472,17 @@ export const useFmsStore = create<FmsStoreState>((set, get) => ({
     sid: null,
     transition: null,
   },
+  pendingArrival: {
+    runway: null,
+    star: null,
+    starTransition: null,
+    approach: null,
+    approachTransition: null,
+  },
   pendingAirway: null,
 
+  flightPhase: 'PREFLIGHT',
+  roaasEnabled: true,
   toDataset: {
     thrustRating: 'TO-1',
     toTempC: 20,
@@ -1424,7 +1444,18 @@ export const useFmsStore = create<FmsStoreState>((set, get) => ({
       const currentPlan = state.modFlightPlan ?? state.flightPlan;
       const pageOffset = (state.subPageIndex - 1) * 4;
 
-      // Bottom LSKs 6L / 6R: MOD confirmation or PERF DATA / PROGRESS
+      // Bottom LSKs 6L / 6R & 5L / 5R (Missed Approach):
+      if (state.flightPhase === 'MISSED_APPROACH' && !state.modFlightPlan) {
+        if (lsk === '5L') {
+          set({ activePage: 'MISSED_APPROACH', subPageIndex: 1 });
+          return;
+        }
+        if (lsk === '5R') {
+          set({ activePage: 'ALTERNATE_FPL', subPageIndex: 1 });
+          return;
+        }
+      }
+
       if (lsk === '6L') {
         if (state.modFlightPlan) {
           // <ACTIVATE MOD
@@ -1434,6 +1465,18 @@ export const useFmsStore = create<FmsStoreState>((set, get) => ({
             directToMode: false,
           });
           soundEngine.playConfirmChime();
+        } else if (
+          state.flightPhase === 'APPROACH' ||
+          state.flightPhase === 'MISSED_APPROACH'
+        ) {
+          set({ activePage: 'ARRIVAL', subPageIndex: 1 });
+        } else if (state.flightPhase === 'CLIMB') {
+          set({ activePage: 'CLIMB', subPageIndex: 1 });
+        } else if (
+          state.flightPhase === 'CRUISE' ||
+          state.flightPhase === 'DESCENT'
+        ) {
+          set({ activePage: 'DESCENT', subPageIndex: 1 });
         } else {
           set({ activePage: 'PERF_INIT', subPageIndex: 1 });
         }
@@ -1443,6 +1486,16 @@ export const useFmsStore = create<FmsStoreState>((set, get) => ({
         if (state.modFlightPlan) {
           // CANCEL MOD>
           set({ modFlightPlan: null, directToMode: false });
+        } else if (
+          state.flightPhase === 'CRUISE' ||
+          state.flightPhase === 'DESCENT'
+        ) {
+          set({ activePage: 'ARRIVAL', subPageIndex: 1 });
+        } else if (
+          state.flightPhase === 'APPROACH' ||
+          state.flightPhase === 'MISSED_APPROACH'
+        ) {
+          set({ activePage: 'LANDING_INIT', subPageIndex: 1 });
         } else {
           set({ activePage: 'PROGRESS', subPageIndex: 1 });
         }
@@ -2398,14 +2451,303 @@ export const useFmsStore = create<FmsStoreState>((set, get) => ({
     }
 
     if (
+      state.activePage === 'ARRIVAL' ||
+      state.activePage === 'ARRIVAL_RUNWAYS' ||
+      state.activePage === 'ARRIVAL_STARS' ||
+      state.activePage === 'ARRIVAL_STAR_TRANS' ||
+      state.activePage === 'ARRIVAL_APPROACH' ||
+      state.activePage === 'ARRIVAL_APPR_TRANS'
+    ) {
+      const plan = state.modFlightPlan ?? state.flightPlan;
+      const apt =
+        NAV_AIRPORTS[plan.destination] ?? NAV_AIRPORTS.KMSP ?? NAV_AIRPORTS.SBRJ;
+      const pa = state.pendingArrival;
+      const hasPending = Boolean(
+        pa.runway || pa.star || pa.starTransition || pa.approach || pa.approachTransition
+      );
+
+      if (state.activePage === 'ARRIVAL') {
+        if (lsk === '1R') set({ activePage: 'ARRIVAL_RUNWAYS', subPageIndex: 1 });
+        else if (lsk === '2R') set({ activePage: 'ARRIVAL_STARS', subPageIndex: 1 });
+        else if (lsk === '3R') set({ activePage: 'ARRIVAL_STAR_TRANS', subPageIndex: 1 });
+        else if (lsk === '4R') set({ activePage: 'ARRIVAL_APPROACH', subPageIndex: 1 });
+        else if (lsk === '5R') set({ activePage: 'ARRIVAL_APPR_TRANS', subPageIndex: 1 });
+        else if (lsk === '6L') {
+          if (hasPending) {
+            set({
+              pendingArrival: {
+                runway: null,
+                star: null,
+                starTransition: null,
+                approach: null,
+                approachTransition: null,
+              },
+            });
+          } else {
+            set({ activePage: 'NAV_INDEX', subPageIndex: 1 });
+          }
+        } else if (lsk === '6R') {
+          if (hasPending) {
+            const selRwy = pa.runway ?? plan.arrivalRunway;
+            const selStar = pa.star ?? plan.star;
+            const selStarTrans = pa.starTransition ?? plan.starTransition ?? null;
+            const selAppr = pa.approach ?? plan.approach;
+            const selApprTrans = pa.approachTransition ?? plan.approachTransition ?? null;
+
+            const starWptIds =
+              selStar && selStarTrans && apt.starTransitions?.[selStar]?.[selStarTrans]
+                ? apt.starTransitions[selStar][selStarTrans]
+                : selStar
+                  ? apt.stars[selStar] ?? []
+                  : [];
+
+            const apprWptIds =
+              selAppr &&
+              selApprTrans &&
+              apt.approachTransitions?.[selAppr]?.[selApprTrans]
+                ? apt.approachTransitions[selAppr][selApprTrans]
+                : [];
+
+            const allIds = Array.from(new Set([...starWptIds, ...apprWptIds]));
+            const arrWpts: FmsWaypoint[] = allIds
+              .map((id, idx) => {
+                const pt = lookupNavPoint(id);
+                if (!pt) return null;
+                return {
+                  id: `wpt-arr-${pt.ident}-${Date.now()}-${idx}`,
+                  ident: pt.ident,
+                  type: pt.type,
+                  coordinates: { lat: pt.lat, lon: pt.lon },
+                  viaAirway: selStar ?? selAppr ?? 'DIRECT',
+                  predictions: {
+                    etaUtc: '1310z',
+                    dtgNm: 15,
+                    cumulativeDtgNm: 195,
+                    efobKg: 10.8,
+                    predictedAltitudeFt: 8000,
+                  },
+                } as FmsWaypoint;
+              })
+              .filter((x): x is FmsWaypoint => x !== null);
+
+            const destWpt = plan.waypoints[plan.waypoints.length - 1];
+            const filteredBeforeDest = plan.waypoints
+              .slice(0, -1)
+              .filter((w) => !allIds.includes(w.ident));
+
+            const modPlan = computeFlightPlanPredictions(
+              {
+                ...plan,
+                planType: 'MOD',
+                arrivalRunway: selRwy ?? plan.arrivalRunway,
+                star: selStar ?? plan.star,
+                starTransition: selStarTrans,
+                approach: selAppr ?? plan.approach,
+                approachTransition: selApprTrans,
+                waypoints: destWpt
+                  ? [...filteredBeforeDest, ...arrWpts, destWpt]
+                  : [...filteredBeforeDest, ...arrWpts],
+              },
+              state.weights.fuelOnBoard,
+              state.altitude.cruiseAltitudeFt,
+              state.speeds.activeSchedule.cruiseMach
+            );
+
+            set({
+              modFlightPlan: modPlan,
+              pendingArrival: {
+                runway: null,
+                star: null,
+                starTransition: null,
+                approach: null,
+                approachTransition: null,
+              },
+              activePage: 'ACTIVE_FLT_PLAN',
+              subPageIndex: 1,
+            });
+            soundEngine.playConfirmChime();
+          } else {
+            set({ activePage: 'ACTIVE_FLT_PLAN', subPageIndex: 1 });
+          }
+        }
+        return;
+      }
+
+      if (state.activePage === 'ARRIVAL_RUNWAYS') {
+        if (lsk === '6R') {
+          set({ activePage: 'ARRIVAL', subPageIndex: 1 });
+          return;
+        }
+        const rowIdx = parseInt(lsk[0], 10) - 1;
+        const rwyIdx = lsk[1] === 'R' ? rowIdx + 5 : rowIdx;
+        const chosen = apt.runways[rwyIdx];
+        if (chosen) {
+          set({
+            pendingArrival: { ...pa, runway: chosen.ident },
+            activePage: 'ARRIVAL_STARS',
+            subPageIndex: 1,
+          });
+        }
+        return;
+      }
+
+      if (state.activePage === 'ARRIVAL_STARS') {
+        if (lsk === '6R') {
+          set({ activePage: 'ARRIVAL', subPageIndex: 1 });
+          return;
+        }
+        const stars = Object.keys(apt.stars);
+        const rowIdx = parseInt(lsk[0], 10) - 1;
+        if (lsk[1] === 'L' && stars[rowIdx]) {
+          const chosenStar = stars[rowIdx];
+          const hasTrans =
+            apt.starTransitions &&
+            apt.starTransitions[chosenStar] &&
+            Object.keys(apt.starTransitions[chosenStar]).length > 0;
+          set({
+            pendingArrival: { ...pa, star: chosenStar, starTransition: null },
+            activePage: hasTrans ? 'ARRIVAL_STAR_TRANS' : 'ARRIVAL',
+            subPageIndex: 1,
+          });
+        }
+        return;
+      }
+
+      if (state.activePage === 'ARRIVAL_STAR_TRANS') {
+        if (lsk === '6R') {
+          set({ activePage: 'ARRIVAL', subPageIndex: 1 });
+          return;
+        }
+        const selStar = pa.star ?? plan.star ?? Object.keys(apt.stars)[0] ?? '';
+        const transList = Object.keys(apt.starTransitions?.[selStar] ?? {});
+        const rowIdx = parseInt(lsk[0], 10) - 1;
+        if (lsk[1] === 'L' && transList[rowIdx]) {
+          set({
+            pendingArrival: { ...pa, starTransition: transList[rowIdx] },
+            activePage: 'ARRIVAL',
+            subPageIndex: 1,
+          });
+        }
+        return;
+      }
+
+      if (state.activePage === 'ARRIVAL_APPROACH') {
+        if (lsk === '6R') {
+          set({ activePage: 'ARRIVAL', subPageIndex: 1 });
+          return;
+        }
+        const apprs = apt.approaches ?? ['ILS 30L', 'RNAV 30L'];
+        const rowIdx = parseInt(lsk[0], 10) - 1;
+        if (lsk[1] === 'L' && apprs[rowIdx]) {
+          const chosenAppr = apprs[rowIdx];
+          const rwyMatch = chosenAppr.match(/(\d{2}[LRC]?)/);
+          const hasTrans =
+            apt.approachTransitions &&
+            apt.approachTransitions[chosenAppr] &&
+            Object.keys(apt.approachTransitions[chosenAppr]).length > 0;
+          set({
+            pendingArrival: {
+              ...pa,
+              approach: chosenAppr,
+              runway: rwyMatch ? rwyMatch[1] : pa.runway,
+              approachTransition: null,
+            },
+            activePage: hasTrans ? 'ARRIVAL_APPR_TRANS' : 'ARRIVAL',
+            subPageIndex: 1,
+          });
+        }
+        return;
+      }
+
+      if (state.activePage === 'ARRIVAL_APPR_TRANS') {
+        if (lsk === '6R') {
+          set({ activePage: 'ARRIVAL', subPageIndex: 1 });
+          return;
+        }
+        const selAppr =
+          pa.approach ?? plan.approach ?? (apt.approaches?.[0] ?? 'ILS 30L');
+        const transList = Object.keys(apt.approachTransitions?.[selAppr] ?? {});
+        const rowIdx = parseInt(lsk[0], 10) - 1;
+        if (lsk[1] === 'L' && transList[rowIdx]) {
+          set({
+            pendingArrival: { ...pa, approachTransition: transList[rowIdx] },
+            activePage: 'ARRIVAL',
+            subPageIndex: 1,
+          });
+        }
+        return;
+      }
+    }
+
+    if (state.activePage === 'LANDING_INIT') {
+      if (lsk === '5L') {
+        set({ activePage: 'ROAAS', subPageIndex: 1 });
+      } else if (lsk === '6L') {
+        set({
+          speeds: {
+            ...state.speeds,
+            landingSpeeds: {
+              ...state.speeds.landingSpeeds,
+              isCompPending: true,
+            },
+          },
+        });
+        soundEngine.playConfirmChime();
+      } else if (lsk === '6R') {
+        set({ activePage: 'LANDING', subPageIndex: 1 });
+      }
+      return;
+    }
+
+    if (state.activePage === 'ROAAS') {
+      if (lsk === '1L') {
+        set({ roaasEnabled: !state.roaasEnabled });
+      } else if (lsk === '6L') {
+        set({ activePage: 'LANDING_INIT', subPageIndex: 1 });
+      }
+      return;
+    }
+
+    if (state.activePage === 'MISSED_APPROACH') {
+      if (lsk === '6L') set({ activePage: 'ACTIVE_FLT_PLAN', subPageIndex: 1 });
+      else if (lsk === '6R') set({ activePage: 'ALTERNATE_FPL', subPageIndex: 1 });
+      return;
+    }
+
+    if (state.activePage === 'ALTERNATE_FPL') {
+      if (lsk === '6L') set({ activePage: 'ACTIVE_FLT_PLAN', subPageIndex: 1 });
+      else if (lsk === '6R') {
+        set({ activePage: 'ACTIVE_FLT_PLAN', subPageIndex: 1 });
+        soundEngine.playConfirmChime();
+      }
+      return;
+    }
+
+    if (
       state.activePage === 'CLIMB' ||
       state.activePage === 'CRUISE' ||
       state.activePage === 'DESCENT' ||
       state.activePage === 'LANDING' ||
-      state.activePage === 'ARRIVAL' ||
       state.activePage === 'FUEL_MGT' ||
       state.activePage === 'CONVERSION'
     ) {
+      if (state.activePage === 'LANDING' && lsk === '5L') {
+        set({
+          speeds: {
+            ...state.speeds,
+            landingSpeeds: {
+              ...state.speeds.landingSpeeds,
+              isCompPending: false,
+            },
+          },
+        });
+        soundEngine.playConfirmChime();
+        return;
+      }
+      if (state.activePage === 'LANDING' && lsk === '6L') {
+        set({ activePage: 'LANDING_INIT', subPageIndex: 1 });
+        return;
+      }
       if (lsk === '1L' && sp && state.activePage === 'CRUISE') {
         const mRes = parseMachSpeed(sp);
         if (mRes.valid && mRes.value) {
@@ -2459,6 +2801,10 @@ export const useFmsStore = create<FmsStoreState>((set, get) => ({
         });
       }
     }
+  },
+
+  setFlightPhase: (phase: FlightPhase) => {
+    set({ flightPhase: phase });
   },
 
   setTrainingMode: (mode) => set({ trainingMode: mode }),
@@ -2572,7 +2918,15 @@ export const useFmsStore = create<FmsStoreState>((set, get) => ({
       flightPlan: createDefaultFlightPlan(),
       modFlightPlan: null,
       pendingDeparture: { runway: null, sid: null, transition: null },
+      pendingArrival: {
+        runway: null,
+        star: null,
+        starTransition: null,
+        approach: null,
+        approachTransition: null,
+      },
       pendingAirway: null,
+      flightPhase: 'PREFLIGHT',
       guidedStepIndex: 0,
     });
   },
@@ -2611,7 +2965,15 @@ export const useFmsStore = create<FmsStoreState>((set, get) => ({
       flightPlan: createDefaultFlightPlan(),
       modFlightPlan: null,
       pendingDeparture: { runway: null, sid: null, transition: null },
+      pendingArrival: {
+        runway: null,
+        star: null,
+        starTransition: null,
+        approach: null,
+        approachTransition: null,
+      },
       pendingAirway: null,
+      flightPhase: 'PREFLIGHT',
     });
   },
 }));
