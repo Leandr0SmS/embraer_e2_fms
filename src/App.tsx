@@ -19,6 +19,8 @@ const QUICK_PAGES: Array<{ id: McduPageId; sub: number; label: string }> = [
   { id: 'ACT_RTE', sub: 2, label: 'ACT RTE 2/3' },
   { id: 'PERF_INIT', sub: 1, label: 'PERF INIT 1/3' },
   { id: 'PERF_INIT', sub: 2, label: 'PERF INIT 2/3' },
+  { id: 'PERF_INIT', sub: 3, label: 'PERF INIT 3/3' },
+  { id: 'TO_DATASET', sub: 1, label: 'T/O DATASET' },
   { id: 'TAKEOFF_INIT', sub: 1, label: 'TAKEOFF 1/2' },
   { id: 'TAKEOFF_VSPEEDS', sub: 1, label: 'VSPEEDS 2/2' },
   { id: 'ACTIVE_FLT_PLAN', sub: 1, label: 'FLT PLAN' },
@@ -110,6 +112,7 @@ export default function App() {
             onCharKey={state.typeScratchpadChar}
             onDelKey={state.pressDelKey}
             onClrKey={state.pressClrKey}
+            onKnobRotate={state.rotateKnob}
             highlightedLsk={currentGuidedStep?.targetLsk ?? null}
             highlightedFunctionKey={currentGuidedStep?.targetFunctionKey ?? null}
           />

@@ -309,6 +309,17 @@ export interface McduLskRow {
   rightReverse?: boolean;
 }
 
+export interface ToDatasetData {
+  thrustRating: 'TO-1' | 'TO-2' | 'TO-3';
+  toTempC: number;
+  attcs: boolean;
+  refEcs: 'OFF' | 'ON';
+  refAntiIce: 'OFF' | 'ENG' | 'ALL';
+  flexTakeoff: boolean;
+  flexTempC: number;
+  entered: boolean;
+}
+
 export interface McduScreenLayout {
   title: string;
   titleColor?: McduColor;

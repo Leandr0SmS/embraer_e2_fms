@@ -17,6 +17,7 @@ import {
   McduPageId,
   ScratchpadMessage,
   ScratchpadPriority,
+  ToDatasetData,
 } from '../types/fms';
 import {
   NAV_AIRPORTS,
@@ -292,6 +293,9 @@ export interface FmsStoreState {
   };
   pendingAirway: string | null;
 
+  toDataset: ToDatasetData;
+  activeKnobField: 'TO_TEMP' | 'FLEX_TEMP' | null;
+
   // Training & Guided Mode
   trainingMode: 'FREE' | 'GUIDED';
   guidedStepIndex: number;
@@ -308,6 +312,7 @@ export interface FmsStoreState {
   pressFunctionKey: (key: FmsFunctionKey) => void;
   navigateToPage: (page: McduPageId, subPage?: number) => void;
   pressLsk: (lsk: LskId) => void;
+  rotateKnob: (delta: 1 | -1) => void;
 
   // Direct Helper Actions & Training Controls
   computeToldVSpeeds: () => void;
@@ -458,6 +463,18 @@ export const useFmsStore = create<FmsStoreState>((set, get) => ({
   },
   pendingAirway: null,
 
+  toDataset: {
+    thrustRating: 'TO-1',
+    toTempC: 20,
+    attcs: true,
+    refEcs: 'ON',
+    refAntiIce: 'OFF',
+    flexTakeoff: false,
+    flexTempC: 25,
+    entered: false,
+  },
+  activeKnobField: null,
+
   trainingMode: 'GUIDED',
   guidedStepIndex: 0,
 
@@ -589,6 +606,13 @@ export const useFmsStore = create<FmsStoreState>((set, get) => ({
         break;
       case 'RTE':
         set({ activePage: 'ACT_RTE', subPageIndex: 1, directToMode: false });
+        break;
+      case 'TRS':
+        set({ activePage: 'TO_DATASET', subPageIndex: 1, directToMode: false });
+        break;
+      case 'MENU':
+      case 'DLK':
+        set({ activePage: 'NAV_INDEX', subPageIndex: 1, directToMode: false });
         break;
       case 'DIR':
         set({
@@ -1732,6 +1756,66 @@ export const useFmsStore = create<FmsStoreState>((set, get) => ({
       }
 
       if (state.subPageIndex === 2) {
+        const handleZfwEntry = () => {
+          if (isDelete) {
+            state.pushMessage('INVALID DELETE', 'HIGH');
+            return;
+          }
+          if (!sp) {
+            if (state.weights.zeroFuelWeight !== null) {
+              downSelect(`${Math.round(state.weights.zeroFuelWeight * 1000)}`);
+            }
+            return;
+          }
+          const zfwRes = parseZfwInput(sp);
+          if (!zfwRes.valid || zfwRes.value === undefined) {
+            state.pushMessage(zfwRes.error || 'INVALID ENTRY', 'HIGH');
+            return;
+          }
+          const newGw = Number((zfwRes.value + state.weights.fuelOnBoard).toFixed(1));
+          const optAlt = newGw > 56 ? 33000 : newGw > 50 ? 35000 : 37000;
+          set({
+            weights: {
+              ...state.weights,
+              zeroFuelWeight: zfwRes.value,
+              grossWeight: newGw,
+            },
+            altitude: {
+              ...state.altitude,
+              optimumAltitudeFt: optAlt,
+            },
+          });
+          if (newGw > state.weights.maxGrossWeight) {
+            state.pushMessage('EXCEEDS MAX GROSS WEIGHT', 'HIGH');
+          }
+          consumeScratchpad();
+        };
+
+        const handleCgEntry = () => {
+          if (isDelete) {
+            state.pushMessage('INVALID DELETE', 'HIGH');
+            return;
+          }
+          if (!sp) {
+            if (state.weights.takeoffCg !== null) {
+              downSelect(state.weights.takeoffCg.toFixed(1));
+            }
+            return;
+          }
+          const cgRes = parseTakeoffCg(sp);
+          if (!cgRes.valid || cgRes.value === undefined) {
+            set({ cgInvalidFlag: true });
+            state.pushMessage(cgRes.error || 'CHECK TAKEOFF CG', 'HIGH');
+            return;
+          }
+          set({
+            weights: { ...state.weights, takeoffCg: cgRes.value },
+            cgInvalidFlag: false,
+            messages: state.messages.filter((m) => m.text !== 'CHECK TAKEOFF CG'),
+          });
+          consumeScratchpad();
+        };
+
         // LSK 1L: CRZ ALT
         if (lsk === '1L') {
           if (isDelete) {
@@ -1761,17 +1845,17 @@ export const useFmsStore = create<FmsStoreState>((set, get) => ({
           });
           consumeScratchpad();
         } else if (lsk === '1R') {
-          // PASS
-          if (!sp) return downSelect(`${state.passengers}`);
-          const pax = parseInt(sp, 10);
-          if (isNaN(pax) || pax < 0 || pax > 146) {
+          // STEP INC (or PASS fallback)
+          if (!sp) return downSelect(`${state.altitude.stepIncrementFt ?? 0}`);
+          const stepVal = parseInt(sp, 10);
+          if (isNaN(stepVal) || stepVal < 0 || stepVal > 4000) {
             state.pushMessage('INVALID ENTRY', 'HIGH');
             return;
           }
-          set({ passengers: pax });
+          set({ altitude: { ...state.altitude, stepIncrementFt: stepVal } });
           consumeScratchpad();
         } else if (lsk === '2L') {
-          // CRZ WIND
+          // CRZ WINDS
           if (!sp) {
             const w = state.atmosphere.averageCruiseWind;
             if (w) downSelect(`${w.direction}/${w.speed}`);
@@ -1787,41 +1871,11 @@ export const useFmsStore = create<FmsStoreState>((set, get) => ({
           });
           consumeScratchpad();
         } else if (lsk === '2R') {
-          // ZFW
-          if (isDelete) {
-            state.pushMessage('INVALID DELETE', 'HIGH');
+          // ISA DEV on authentic 2R, with automatic ZFW fallback if a weight (e.g. 37.6, 42.5, 40000) is entered
+          if (sp && (/^\d{2,3}\.\d$/.test(sp) || parseFloat(sp) >= 30)) {
+            handleZfwEntry();
             return;
           }
-          if (!sp) {
-            if (state.weights.zeroFuelWeight !== null) {
-              downSelect(state.weights.zeroFuelWeight.toFixed(1));
-            }
-            return;
-          }
-          const zfwRes = parseZfwInput(sp);
-          if (!zfwRes.valid || zfwRes.value === undefined) {
-            state.pushMessage(zfwRes.error || 'INVALID ENTRY', 'HIGH');
-            return;
-          }
-          const newGw = Number((zfwRes.value + state.weights.fuelOnBoard).toFixed(1));
-          const optAlt = newGw > 56 ? 33000 : newGw > 50 ? 35000 : 37000;
-          set({
-            weights: {
-              ...state.weights,
-              zeroFuelWeight: zfwRes.value,
-              grossWeight: newGw,
-            },
-            altitude: {
-              ...state.altitude,
-              optimumAltitudeFt: optAlt,
-            },
-          });
-          if (newGw > state.weights.maxGrossWeight) {
-            state.pushMessage('EXCEEDS MAX GROSS WEIGHT', 'HIGH');
-          }
-          consumeScratchpad();
-        } else if (lsk === '3L') {
-          // ISA DEV
           if (!sp) return downSelect(`${state.atmosphere.isaDeviationC}`);
           const tRes = parseTemperatureInput(sp, 'ISA_DEV');
           if (!tRes.valid || tRes.value === undefined) {
@@ -1832,9 +1886,30 @@ export const useFmsStore = create<FmsStoreState>((set, get) => ({
             atmosphere: { ...state.atmosphere, isaDeviationC: tRes.value },
           });
           consumeScratchpad();
+        } else if (lsk === '3L') {
+          // PASS on authentic 3L (or ISA DEV fallback if signed temperature)
+          if (sp && /^[+-M]/.test(sp)) {
+            const tRes = parseTemperatureInput(sp, 'ISA_DEV');
+            if (tRes.valid && tRes.value !== undefined) {
+              set({ atmosphere: { ...state.atmosphere, isaDeviationC: tRes.value } });
+              consumeScratchpad();
+              return;
+            }
+          }
+          if (!sp) return downSelect(`${state.passengers}`);
+          const pax = parseInt(sp, 10);
+          if (isNaN(pax) || pax < 0 || pax > 146) {
+            state.pushMessage('INVALID ENTRY', 'HIGH');
+            return;
+          }
+          set({ passengers: pax });
+          consumeScratchpad();
         } else if (lsk === '3R') {
-          // FOB (GAUGE)
-          if (!sp) return downSelect(state.weights.fuelOnBoard.toFixed(1));
+          // Authentic ZFW at 3R
+          handleZfwEntry();
+        } else if (lsk === '4R') {
+          // Authentic (GAUGE) FUEL at 4R
+          if (!sp) return downSelect(`${Math.round(state.weights.fuelOnBoard * 1000)}`);
           const fRes = parseFuelWeightInput(sp, 25.0);
           if (!fRes.valid || fRes.value === undefined) {
             state.pushMessage('INVALID ENTRY', 'HIGH');
@@ -1853,31 +1928,10 @@ export const useFmsStore = create<FmsStoreState>((set, get) => ({
             state.pushMessage('EXCEEDS MAX GROSS WEIGHT', 'HIGH');
           }
           consumeScratchpad();
-        } else if (lsk === '4L') {
-          // TAKEOFF CG
-          if (isDelete) {
-            state.pushMessage('INVALID DELETE', 'HIGH');
-            return;
-          }
-          if (!sp) {
-            if (state.weights.takeoffCg !== null) {
-              downSelect(state.weights.takeoffCg.toFixed(1));
-            }
-            return;
-          }
-          const cgRes = parseTakeoffCg(sp);
-          if (!cgRes.valid || cgRes.value === undefined) {
-            set({ cgInvalidFlag: true });
-            state.pushMessage(cgRes.error || 'CHECK TAKEOFF CG', 'HIGH');
-            return;
-          }
-          set({
-            weights: { ...state.weights, takeoffCg: cgRes.value },
-            cgInvalidFlag: false,
-            messages: state.messages.filter((m) => m.text !== 'CHECK TAKEOFF CG'),
-          });
-          consumeScratchpad();
-        } else if (lsk === '5L' || lsk === '6L') {
+        } else if (lsk === '5L' || lsk === '4L') {
+          // Authentic TO CG at 5L (and legacy 4L fallback)
+          handleCgEntry();
+        } else if (lsk === '6L') {
           // <CONFIRM INIT
           if (
             state.altitude.cruiseAltitudeFt === null ||
@@ -1897,10 +1951,193 @@ export const useFmsStore = create<FmsStoreState>((set, get) => ({
 
       // PERF INIT 3/3
       if (state.subPageIndex === 3) {
-        if (lsk === '6L') set({ subPageIndex: 2 });
-        else if (lsk === '6R') set({ activePage: 'TAKEOFF_INIT', subPageIndex: 1 });
+        if (lsk === '2R') {
+          set({ activePage: 'CRUISE_MODES', subPageIndex: 1 });
+        } else if (lsk === '4L') {
+          if (!sp) return downSelect(`${state.speeds.activeSchedule.costIndex ?? 30}`);
+          const ci = parseInt(sp, 10);
+          if (isNaN(ci) || ci < 0 || ci > 999) {
+            state.pushMessage('INVALID ENTRY', 'HIGH');
+            return;
+          }
+          set({
+            speeds: {
+              ...state.speeds,
+              activeSchedule: {
+                ...state.speeds.activeSchedule,
+                costIndex: ci,
+              },
+            },
+          });
+          consumeScratchpad();
+        } else if (lsk === '6L') {
+          set({ subPageIndex: 2 });
+        } else if (lsk === '6R') {
+          set({ activePage: 'TO_DATASET', subPageIndex: 1 });
+        }
         return;
       }
+    }
+
+    // =========================================================================
+    // 7B. CRUISE MODES 1/1 & T/O DATASET MENU 1/1
+    // =========================================================================
+    if (state.activePage === 'CRUISE_MODES') {
+      if (lsk === '1R') {
+        set({ activePage: 'PERF_INIT', subPageIndex: 3 });
+      } else if (lsk === '1L') {
+        set({
+          speeds: {
+            ...state.speeds,
+            activeSchedule: {
+              ...state.speeds.activeSchedule,
+              cruiseMode: 'MAX_END',
+              cruiseMach: 0.52,
+            },
+          },
+          activePage: 'PERF_INIT',
+          subPageIndex: 3,
+        });
+      } else if (lsk === '2L') {
+        set({
+          speeds: {
+            ...state.speeds,
+            activeSchedule: {
+              ...state.speeds.activeSchedule,
+              cruiseMode: 'LRC',
+              cruiseMach: 0.65,
+            },
+          },
+          activePage: 'PERF_INIT',
+          subPageIndex: 3,
+        });
+      } else if (lsk === '3L') {
+        set({
+          speeds: {
+            ...state.speeds,
+            activeSchedule: {
+              ...state.speeds.activeSchedule,
+              cruiseMode: 'ECON',
+              cruiseMach: 0.65,
+            },
+          },
+          activePage: 'PERF_INIT',
+          subPageIndex: 3,
+        });
+      } else if (lsk === '4L') {
+        set({
+          speeds: {
+            ...state.speeds,
+            activeSchedule: {
+              ...state.speeds.activeSchedule,
+              cruiseMode: 'MANUAL',
+              cruiseMach: 0.78,
+            },
+          },
+          activePage: 'PERF_INIT',
+          subPageIndex: 3,
+        });
+      }
+      return;
+    }
+
+    if (state.activePage === 'TO_DATASET') {
+      const td = state.toDataset;
+      if (lsk === '1L') {
+        set({
+          toDataset: { ...td, thrustRating: 'TO-1', entered: false },
+          takeoffConfig: { ...state.takeoffConfig, thrustMode: 'TO-1' },
+        });
+      } else if (lsk === '2L') {
+        set({
+          toDataset: { ...td, thrustRating: 'TO-2', entered: false },
+          takeoffConfig: { ...state.takeoffConfig, thrustMode: 'TO-2' },
+        });
+      } else if (lsk === '3L') {
+        set({
+          toDataset: { ...td, thrustRating: 'TO-3', entered: false },
+          takeoffConfig: { ...state.takeoffConfig, thrustMode: 'TO-3' },
+        });
+      } else if (lsk === '4L') {
+        if (sp) {
+          const tRes = parseTemperatureInput(sp, 'OAT');
+          if (!tRes.valid || tRes.value === undefined) {
+            state.pushMessage('INVALID ENTRY', 'HIGH');
+            return;
+          }
+          set({
+            toDataset: { ...td, toTempC: tRes.value, entered: false },
+            atmosphere: { ...state.atmosphere, surfaceOatC: tRes.value },
+            activeKnobField: 'TO_TEMP',
+          });
+          consumeScratchpad();
+        } else {
+          set({
+            activeKnobField: state.activeKnobField === 'TO_TEMP' ? null : 'TO_TEMP',
+          });
+        }
+      } else if (lsk === '5L') {
+        // ■ENTER
+        set({
+          toDataset: { ...td, entered: true },
+          takeoffConfig: { ...state.takeoffConfig, thrustMode: td.thrustRating },
+          atmosphere: {
+            ...state.atmosphere,
+            surfaceOatC: td.toTempC,
+            flexTemperatureC: td.flexTakeoff ? td.flexTempC : null,
+          },
+          activeKnobField: null,
+        });
+        soundEngine.playConfirmChime();
+      } else if (lsk === '1R') {
+        set({ toDataset: { ...td, attcs: !td.attcs, entered: false } });
+      } else if (lsk === '2R') {
+        set({
+          toDataset: {
+            ...td,
+            refEcs: td.refEcs === 'ON' ? 'OFF' : 'ON',
+            entered: false,
+          },
+        });
+      } else if (lsk === '3R') {
+        const order: Array<'OFF' | 'ENG' | 'ALL'> = ['OFF', 'ENG', 'ALL'];
+        const nextAi = order[(order.indexOf(td.refAntiIce) + 1) % order.length];
+        set({ toDataset: { ...td, refAntiIce: nextAi, entered: false } });
+      } else if (lsk === '4R') {
+        set({
+          toDataset: {
+            ...td,
+            flexTakeoff: !td.flexTakeoff,
+            entered: false,
+          },
+        });
+      } else if (lsk === '5R') {
+        if (sp) {
+          const flex = parseInt(sp, 10);
+          if (isNaN(flex) || flex < 15 || flex > 70) {
+            state.pushMessage('INVALID ENTRY', 'HIGH');
+            return;
+          }
+          set({
+            toDataset: { ...td, flexTempC: flex, flexTakeoff: true, entered: false },
+            atmosphere: { ...state.atmosphere, flexTemperatureC: flex },
+            activeKnobField: 'FLEX_TEMP',
+          });
+          consumeScratchpad();
+        } else {
+          set({
+            activeKnobField:
+              state.activeKnobField === 'FLEX_TEMP' ? null : 'FLEX_TEMP',
+          });
+        }
+      } else if (lsk === '6R') {
+        set({
+          activePage: 'TAKEOFF_INIT',
+          subPageIndex: 1,
+          activeKnobField: null,
+        });
+      }
+      return;
     }
 
     // =========================================================================
@@ -2155,6 +2392,28 @@ export const useFmsStore = create<FmsStoreState>((set, get) => ({
         set({ activePage: 'PERF_INDEX', subPageIndex: 1 });
       } else if (lsk === '6R') {
         set({ activePage: 'ACTIVE_FLT_PLAN', subPageIndex: 1 });
+      }
+    }
+  },
+
+  rotateKnob: (delta: 1 | -1) => {
+    soundEngine.playKeyClick(1150);
+    const state = get();
+    if (state.activePage === 'TO_DATASET') {
+      const td = state.toDataset;
+      if (state.activeKnobField === 'FLEX_TEMP') {
+        const nextFlex = Math.max(15, Math.min(70, td.flexTempC + delta));
+        set({
+          toDataset: { ...td, flexTempC: nextFlex, entered: false },
+          atmosphere: { ...state.atmosphere, flexTemperatureC: nextFlex },
+        });
+      } else {
+        const nextToTemp = Math.max(-40, Math.min(55, td.toTempC + delta));
+        set({
+          toDataset: { ...td, toTempC: nextToTemp, entered: false },
+          atmosphere: { ...state.atmosphere, surfaceOatC: nextToTemp },
+          activeKnobField: 'TO_TEMP',
+        });
       }
     }
   },

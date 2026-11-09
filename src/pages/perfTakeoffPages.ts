@@ -80,15 +80,17 @@ export function buildPerfIndexPage(state: FmsStoreState): McduScreenLayout {
 
 export function buildPerfInitPage(state: FmsStoreState): McduScreenLayout {
   if (state.subPageIndex === 1) {
-    const pfSign = state.perfFactorPercent >= 0 ? '+' : '';
-    const rsvUnit = state.weights.fuelReserve.mode === 'MINUTES' ? 'MIN' : '';
+    const pfVal = (1 + state.perfFactorPercent / 100).toFixed(2);
+    const rsvUnit = state.weights.fuelReserve.mode === 'MINUTES' ? 'MIN' : 'KG';
     const rsvText =
       state.weights.fuelReserve.mode === 'MINUTES'
         ? `${state.weights.fuelReserve.value} ${rsvUnit}`
-        : `${state.weights.fuelReserve.value.toFixed(1)}`;
+        : `${Math.round(state.weights.fuelReserve.value * 1000)}`;
+    const toFuelKg = Math.round(state.weights.fuelAllowances.takeoff * 1000);
+    const ldgFuelKg = Math.round(state.weights.fuelAllowances.landing * 1000);
 
     return {
-      title: 'PERFORMANCE INIT',
+      title: 'PERFORMANCE INIT-KG',
       pageNumber: '1/3',
       rows: [
         {
@@ -96,33 +98,33 @@ export function buildPerfInitPage(state: FmsStoreState): McduScreenLayout {
           labelRight: 'PERF FACTOR',
           left: state.tailNumber,
           leftColor: 'GREEN',
-          right: `${pfSign}${state.perfFactorPercent.toFixed(1)}%`,
+          right: pfVal,
           rightColor: 'GREEN',
         },
         {
           labelLeft: 'FUEL RESERVE',
-          labelRight: 'RESERVE MODE',
           left: rsvText,
           leftColor: 'GREEN',
-          right: `${state.weights.fuelReserve.mode}>`,
+          right: 'OR>',
           rightColor: 'WHITE',
         },
         {
-          labelLeft: 'TO / LDG ALW',
-          left: `${state.weights.fuelAllowances.takeoff.toFixed(1)} / ${state.weights.fuelAllowances.landing.toFixed(1)}`,
+          labelLeft: 'TO/LDG FUEL',
+          left: `${toFuelKg}/${ldgFuelKg}`,
           leftColor: 'GREEN',
         },
         {
           labelLeft: 'ALTN FUEL',
           left:
             state.weights.alternateFuel !== null
-              ? state.weights.alternateFuel.toFixed(1)
-              : '---',
-          leftColor: 'GREEN',
-          right: 'DLK PERF>',
+              ? `${Math.round(state.weights.alternateFuel * 1000)}`
+              : '-----',
+          leftColor: state.weights.alternateFuel !== null ? 'GREEN' : 'CYAN',
+        },
+        {
+          right: 'SEND REQST>',
           rightColor: 'WHITE',
         },
-        {},
         {
           right: 'NEXT PAGE>',
           rightColor: 'WHITE',
@@ -141,61 +143,67 @@ export function buildPerfInitPage(state: FmsStoreState): McduScreenLayout {
           : `${crzAlt}FT`;
 
     const wind = state.atmosphere.averageCruiseWind ?? {
-      direction: 270,
-      speed: 35,
+      direction: 0,
+      speed: 0,
     };
-    const windDisplay = `${String(wind.direction).padStart(3, '0')}° / ${String(wind.speed).padStart(3, '0')}`;
+    const windDisplay = `${String(wind.direction).padStart(3, '0')}T/${wind.speed}`;
 
     const isaSign = state.atmosphere.isaDeviationC >= 0 ? '+' : '-';
-    const isaDisplay = `${isaSign}${String(Math.abs(state.atmosphere.isaDeviationC)).padStart(2, '0')}°C`;
+    const isaDisplay = `${isaSign}${Math.abs(state.atmosphere.isaDeviationC)}°C`;
 
     const zfwDisplay =
       state.weights.zeroFuelWeight !== null
-        ? state.weights.zeroFuelWeight.toFixed(1)
-        : '□□.□';
+        ? `${Math.round(state.weights.zeroFuelWeight * 1000)}`
+        : '□□□□□';
+
+    const fobKg = Math.round(state.weights.fuelOnBoard * 1000);
+    const fuelDisplay = `(${fobKg}) ${fobKg}`;
 
     const cgDisplay =
       state.weights.takeoffCg !== null
-        ? state.weights.takeoffCg.toFixed(1)
-        : '□□.□';
+        ? `${state.weights.takeoffCg.toFixed(1)}%`
+        : '□□.□%';
 
     const gw = state.weights.grossWeight;
-    const gwDisplay = gw !== null ? gw.toFixed(1) : '----';
+    const gwKg = gw !== null ? Math.round(gw * 1000) : fobKg;
+    const gwDisplay = `${gwKg}`;
     const isGwExceeded = gw !== null && gw > state.weights.maxGrossWeight;
 
-    const optAlt = state.altitude.optimumAltitudeFt;
-    const optAltStr = optAlt ? `FL${Math.round(optAlt / 100)}` : '-----';
-
     return {
-      title: 'PERFORMANCE INIT',
+      title: 'PERFORMANCE INIT-KG',
       pageNumber: '2/3',
       rows: [
         {
           labelLeft: 'CRZ ALT',
-          labelRight: 'PASS',
+          labelRight: 'STEP INC',
           left: crzAltDisplay,
           leftColor: crzAlt !== null ? 'GREEN' : 'CYAN',
-          right: `${state.passengers}`,
+          right: `${state.altitude.stepIncrementFt ?? 0}`,
           rightColor: 'GREEN',
         },
         {
-          labelLeft: 'CRZ WIND',
-          labelRight: 'ZFW',
+          labelLeft: 'CRZ WINDS',
+          labelRight: 'ISA DEV',
           left: windDisplay,
+          leftColor: 'GREEN',
+          right: isaDisplay,
+          rightColor: 'GREEN',
+        },
+        {
+          labelLeft: 'PASS',
+          labelRight: 'ZFW',
+          left: `${state.passengers}`,
           leftColor: 'GREEN',
           right: zfwDisplay,
           rightColor: state.weights.zeroFuelWeight !== null ? 'GREEN' : 'CYAN',
         },
         {
-          labelLeft: 'ISA DEV',
-          labelRight: `FOB (${state.weights.fuelSource})`,
-          left: isaDisplay,
-          leftColor: 'GREEN',
-          right: state.weights.fuelOnBoard.toFixed(1),
+          labelRight: `(${state.weights.fuelSource}) FUEL`,
+          right: fuelDisplay,
           rightColor: 'GREEN',
         },
         {
-          labelLeft: 'TAKEOFF CG',
+          labelLeft: 'TO CG',
           labelRight: 'GROSS WT',
           left: cgDisplay,
           leftColor: state.cgInvalidFlag
@@ -205,79 +213,154 @@ export function buildPerfInitPage(state: FmsStoreState): McduScreenLayout {
               : 'CYAN',
           leftReverse: state.cgInvalidFlag,
           right: gwDisplay,
-          rightColor: isGwExceeded ? 'YELLOW' : 'CYAN',
-          rightSize: 'SMALL',
+          rightColor: isGwExceeded ? 'YELLOW' : 'GREEN',
           rightReverse: isGwExceeded,
-        },
-        {
-          labelLeft: 'OPT ALT',
-          labelRight: 'MAX ALT',
-          left: optAltStr,
-          leftColor: 'CYAN',
-          leftSize: 'SMALL',
-          right: `FL${Math.round(state.altitude.certifiedCeilingFt / 100)}`,
-          rightColor: 'CYAN',
-          rightSize: 'SMALL',
         },
         {
           left: state.perfInitConfirmed ? '*INIT CONFIRMED' : '<CONFIRM INIT',
           leftColor: state.perfInitConfirmed ? 'CYAN' : 'WHITE',
           leftSize: state.perfInitConfirmed ? 'SMALL' : 'LARGE',
           leftReverse: !state.perfInitConfirmed,
-          right: 'TAKEOFF INIT>',
+          right: 'NEXT PAGE>',
           rightColor: 'WHITE',
         },
       ],
     };
   }
 
-  // PERFORMANCE INIT 3/3
+  // PERFORMANCE INIT-KG 3/3
   const sched = state.speeds.activeSchedule;
+  const clbStr = `${sched.climbMode}(${sched.climbCasMach.cas}/.${Math.round(sched.climbCasMach.mach * 100)}M)`;
+  const crzStr = `${sched.cruiseMode}(242/.${Math.round(sched.cruiseMach * 100)}M)`;
+  const desStr = `${sched.descentMode}(${sched.descentCasMach.cas}/.${Math.round(sched.descentCasMach.mach * 100)}M)`;
+
   return {
-    title: 'PERFORMANCE INIT',
+    title: 'PERFORMANCE INIT-KG',
     pageNumber: '3/3',
     rows: [
       {
-        labelLeft: 'CLIMB SPD',
-        labelRight: 'MODE',
-        left: `${sched.climbCasMach.cas}/.${Math.round(sched.climbCasMach.mach * 100)}`,
+        labelLeft: 'CLIMB SPEED',
+        left: clbStr,
         leftColor: 'GREEN',
-        right: sched.climbMode,
-        rightColor: 'CYAN',
-        rightSize: 'SMALL',
+        right: 'OR>',
+        rightColor: 'WHITE',
       },
       {
-        labelLeft: 'CRUISE SPD',
-        labelRight: 'MODE',
-        left: `.${Math.round(sched.cruiseMach * 100)}M`,
+        labelLeft: 'CRUISE SPEED',
+        left: crzStr,
         leftColor: 'GREEN',
-        right: sched.cruiseMode,
-        rightColor: 'CYAN',
-        rightSize: 'SMALL',
+        right: 'OR>',
+        rightColor: 'WHITE',
       },
       {
-        labelLeft: 'DESCENT SPD',
-        labelRight: 'MODE',
-        left: `${sched.descentCasMach.cas}/.${Math.round(sched.descentCasMach.mach * 100)}`,
+        labelLeft: 'DESCENT SPEED',
+        left: desStr,
         leftColor: 'GREEN',
-        right: sched.descentMode,
-        rightColor: 'CYAN',
-        rightSize: 'SMALL',
+        right: 'OR>',
+        rightColor: 'WHITE',
       },
       {
-        labelLeft: 'TRANS ALT',
-        labelRight: 'SPD LIM',
-        left: `${state.altitude.transitionAltitudeFt}FT`,
+        labelLeft: 'COST INDEX',
+        left: `${sched.costIndex ?? 30}`,
         leftColor: 'GREEN',
-        right: `${state.speeds.limits.speedLimitAlt.speed}/${state.speeds.limits.speedLimitAlt.alt}`,
-        rightColor: 'CYAN',
-        rightSize: 'SMALL',
       },
       {},
       {
         left: '<PERF INIT 2/3',
         leftColor: 'WHITE',
-        right: 'TAKEOFF INIT>',
+        right: 'TO DATASET>',
+        rightColor: 'WHITE',
+      },
+    ],
+  };
+}
+
+export function buildCruiseModesPage(): McduScreenLayout {
+  return {
+    title: 'CRUISE MODES',
+    pageNumber: '1/1',
+    rows: [
+      {
+        left: '<MAX END (197/.52M)',
+        leftColor: 'GREEN',
+        right: 'RETURN>',
+        rightColor: 'WHITE',
+      },
+      {
+        left: '<LRC (241/.65M)',
+        leftColor: 'GREEN',
+      },
+      {
+        left: '<ECON (242/.65M)',
+        leftColor: 'GREEN',
+      },
+      {
+        left: '<SEL SPD (280/.78M)',
+        leftColor: 'GREEN',
+      },
+      {},
+      {},
+    ],
+  };
+}
+
+export function buildToDatasetPage(state: FmsStoreState): McduScreenLayout {
+  const td = state.toDataset;
+  const isToTempActive = state.activeKnobField === 'TO_TEMP';
+  const isFlexTempActive = state.activeKnobField === 'FLEX_TEMP';
+
+  const aiStr =
+    td.refAntiIce === 'ALL'
+      ? 'OFF ENG ALL<-'
+      : td.refAntiIce === 'ENG'
+        ? 'OFF ->ENG ALL'
+        : '->OFF ENG ALL';
+
+  return {
+    title: 'T/O DATASET MENU',
+    pageNumber: '1/1',
+    rows: [
+      {
+        labelRight: 'ATTCS',
+        left: `${td.thrustRating === 'TO-1' ? '*' : ' '}TO-1 (19K8)`,
+        leftColor: 'GREEN',
+        right: td.attcs ? 'OFF ON<-' : '->OFF ON',
+        rightColor: 'GREEN',
+      },
+      {
+        labelRight: 'REF ECS',
+        left: `${td.thrustRating === 'TO-2' ? '*' : ' '}TO-2 (17K9)`,
+        leftColor: 'GREEN',
+        right: td.refEcs === 'ON' ? 'OFF ON<-' : '->OFF ON',
+        rightColor: 'GREEN',
+      },
+      {
+        labelRight: 'REF A/I',
+        left: `${td.thrustRating === 'TO-3' ? '*' : ' '}TO-3 (17K1)`,
+        leftColor: 'GREEN',
+        right: aiStr,
+        rightColor: 'GREEN',
+      },
+      {
+        labelLeft: 'TO TEMP',
+        labelRight: 'FLEX T/O',
+        left: `${td.toTempC} C`,
+        leftColor: isToTempActive ? 'CYAN' : 'GREEN',
+        right: td.flexTakeoff ? 'OFF ON<-' : '->OFF ON',
+        rightColor: 'GREEN',
+      },
+      {
+        labelRight: 'FLEX TEMP',
+        left: '■ENTER',
+        leftColor: 'WHITE',
+        leftReverse: !td.entered,
+        right: td.flexTakeoff ? `C ${td.flexTempC} C` : '-----',
+        rightColor: isFlexTempActive ? 'CYAN' : 'GREEN',
+      },
+      {
+        left: '<TRS',
+        leftColor: 'WHITE',
+        right: 'FMS TAKEOFF>',
         rightColor: 'WHITE',
       },
     ],

@@ -16,10 +16,12 @@ import {
   buildDeparturePages,
 } from './rteFplPages';
 import {
+  buildCruiseModesPage,
   buildPerfIndexPage,
   buildPerfInitPage,
   buildTakeoffInitPage,
   buildTakeoffVspeedsPage,
+  buildToDatasetPage,
 } from './perfTakeoffPages';
 import {
   buildNavIndexPage,
@@ -48,6 +50,10 @@ export function getActiveScreenLayout(state: FmsStoreState): McduScreenLayout {
       return buildPerfIndexPage(state);
     case 'PERF_INIT':
       return buildPerfInitPage(state);
+    case 'CRUISE_MODES':
+      return buildCruiseModesPage();
+    case 'TO_DATASET':
+      return buildToDatasetPage(state);
     case 'TAKEOFF_INIT':
       return buildTakeoffInitPage(state);
     case 'TAKEOFF_VSPEEDS':

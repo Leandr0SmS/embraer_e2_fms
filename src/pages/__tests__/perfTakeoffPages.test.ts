@@ -1,13 +1,15 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { useFmsStore } from '../../store/useFmsStore';
 import {
+  buildCruiseModesPage,
   buildPerfIndexPage,
   buildPerfInitPage,
   buildTakeoffInitPage,
   buildTakeoffVspeedsPage,
+  buildToDatasetPage,
 } from '../perfTakeoffPages';
 
-describe('Performance & Takeoff Initialization Pages (Step 8)', () => {
+describe('Performance, Cruise Modes, T/O Dataset & Takeoff Pages (Step 8 & Step 14)', () => {
   beforeEach(() => {
     useFmsStore.getState().resetToColdPreflight();
   });
@@ -29,29 +31,71 @@ describe('Performance & Takeoff Initialization Pages (Step 8)', () => {
     expect(p2.rows[1].left).toBe('<EO RANGE');
   });
 
-  it('renders box prompts on PERFORMANCE INIT 2/3 when uninitialized and updates when CRZ ALT, ZFW, and CG are entered', () => {
+  it('renders box prompts on PERFORMANCE INIT-KG 2/3 when uninitialized and updates when CRZ ALT, ZFW (3R), and TO CG (5L) are entered', () => {
     const store = useFmsStore.getState();
     store.navigateToPage('PERF_INIT', 2);
     const uninit = buildPerfInitPage(useFmsStore.getState());
-    expect(uninit.rows[0].left).toBe('□□□□□'); // CRZ ALT
-    expect(uninit.rows[1].right).toBe('□□.□'); // ZFW
-    expect(uninit.rows[3].left).toBe('□□.□');  // TAKEOFF CG
+    expect(uninit.title).toBe('PERFORMANCE INIT-KG');
+    expect(uninit.rows[0].left).toBe('□□□□□');  // 1L CRZ ALT
+    expect(uninit.rows[2].right).toBe('□□□□□'); // 3R ZFW
+    expect(uninit.rows[4].left).toBe('□□.□%');  // 5L TO CG
     expect(uninit.rows[5].left).toBe('<CONFIRM INIT');
     expect(uninit.rows[5].leftReverse).toBe(true);
 
-    // Enter CRZ ALT = 280, ZFW = 37.6, TAKEOFF CG = 24.5
-    store.setScratchpadInput('280');
+    // Enter CRZ ALT = 400 (1L), ZFW = 40000 (3R), TO CG = 29.0 (5L)
+    store.setScratchpadInput('400');
     store.pressLsk('1L');
-    store.setScratchpadInput('37.6');
-    store.pressLsk('2R');
-    store.setScratchpadInput('24.5');
-    store.pressLsk('4L');
+    store.setScratchpadInput('40000');
+    store.pressLsk('3R');
+    store.setScratchpadInput('29.0');
+    store.pressLsk('5L');
 
     const init = buildPerfInitPage(useFmsStore.getState());
-    expect(init.rows[0].left).toBe('FL280');
-    expect(init.rows[1].right).toBe('37.6');
-    expect(init.rows[3].left).toBe('24.5');
-    expect(init.rows[3].right).toBe('51.8'); // Gross Weight = 37.6 + 14.2
+    expect(init.rows[0].left).toBe('FL400');
+    expect(init.rows[2].right).toBe('40000');
+    expect(init.rows[4].left).toBe('29.0%');
+    expect(init.rows[4].right).toBe('54200'); // Gross Weight = 40000 + 14200
+  });
+
+  it('supports CRUISE MODES 1/1 and T/O DATASET MENU 1/1 with Rotary Knob adjustment and ■ENTER', () => {
+    const store = useFmsStore.getState();
+    store.navigateToPage('PERF_INIT', 3);
+    const p3 = buildPerfInitPage(useFmsStore.getState());
+    expect(p3.title).toBe('PERFORMANCE INIT-KG');
+    expect(p3.rows[3].labelLeft).toBe('COST INDEX');
+    expect(p3.rows[5].right).toBe('TO DATASET>');
+
+    // Press 2R (OR>) -> opens CRUISE MODES 1/1
+    store.pressLsk('2R');
+    expect(useFmsStore.getState().activePage).toBe('CRUISE_MODES');
+    const cm = buildCruiseModesPage();
+    expect(cm.title).toBe('CRUISE MODES');
+    expect(cm.rows[1].left).toBe('<LRC (241/.65M)');
+
+    // Select LRC (2L) -> returns to PERF INIT 3/3
+    useFmsStore.getState().pressLsk('2L');
+    expect(useFmsStore.getState().activePage).toBe('PERF_INIT');
+    expect(useFmsStore.getState().speeds.activeSchedule.cruiseMode).toBe('LRC');
+
+    // Press 6R (TO DATASET>) -> opens T/O DATASET MENU 1/1
+    useFmsStore.getState().pressLsk('6R');
+    expect(useFmsStore.getState().activePage).toBe('TO_DATASET');
+    const td1 = buildToDatasetPage(useFmsStore.getState());
+    expect(td1.title).toBe('T/O DATASET MENU');
+    expect(td1.rows[4].left).toBe('■ENTER');
+
+    // Select TO-3 (3L), enable FLEX T/O (4R), select FLEX TEMP (5R), rotate knob +2, and press 5L (■ENTER)
+    useFmsStore.getState().pressLsk('3L');
+    useFmsStore.getState().pressLsk('4R');
+    useFmsStore.getState().pressLsk('5R');
+    useFmsStore.getState().rotateKnob(1);
+    useFmsStore.getState().rotateKnob(1);
+    useFmsStore.getState().pressLsk('5L'); // ■ENTER
+
+    const td2 = buildToDatasetPage(useFmsStore.getState());
+    expect(td2.rows[2].left).toBe('*TO-3 (17K1)');
+    expect(td2.rows[4].right).toBe('C 27 C');
+    expect(td2.rows[4].leftReverse).toBe(false);
   });
 
   it('builds TAKEOFF INIT 1/2 and TAKEOFF VSPEEDS 2/2 with reverse video when V1 > VR', () => {
