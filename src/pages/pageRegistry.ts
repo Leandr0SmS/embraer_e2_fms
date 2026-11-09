@@ -10,7 +10,11 @@ import {
   buildPositionInitPage,
   buildRadioPage,
 } from './initPages';
-import { buildActRtePage, buildActiveFltPlanPage } from './rteFplPages';
+import {
+  buildActRtePage,
+  buildActiveFltPlanPage,
+  buildDeparturePages,
+} from './rteFplPages';
 import {
   buildPerfIndexPage,
   buildPerfInitPage,
@@ -33,6 +37,11 @@ export function getActiveScreenLayout(state: FmsStoreState): McduScreenLayout {
       return buildPositionInitPage(state);
     case 'ACT_RTE':
       return buildActRtePage(state);
+    case 'DEPARTURE':
+    case 'DEPARTURE_RUNWAYS':
+    case 'DEPARTURE_SIDS':
+    case 'DEPARTURE_TRANS':
+      return buildDeparturePages(state);
     case 'ACTIVE_FLT_PLAN':
       return buildActiveFltPlanPage(state);
     case 'PERF_INDEX':

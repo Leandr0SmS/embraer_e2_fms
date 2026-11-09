@@ -20,6 +20,7 @@ import {
 } from '../types/fms';
 import {
   NAV_AIRPORTS,
+  NAV_AIRWAYS,
   NAV_COMPANY_ROUTES,
   NAV_FIXES,
   lookupNavPoint,
@@ -284,6 +285,13 @@ export interface FmsStoreState {
     pbpb: number;
   };
 
+  pendingDeparture: {
+    runway: string | null;
+    sid: string | null;
+    transition: string | null;
+  };
+  pendingAirway: string | null;
+
   // Training & Guided Mode
   trainingMode: 'FREE' | 'GUIDED';
   guidedStepIndex: number;
@@ -442,6 +450,13 @@ export const useFmsStore = create<FmsStoreState>((set, get) => ({
     pd: 1,
     pbpb: 1,
   },
+
+  pendingDeparture: {
+    runway: null,
+    sid: null,
+    transition: null,
+  },
+  pendingAirway: null,
 
   trainingMode: 'GUIDED',
   guidedStepIndex: 0,
@@ -750,8 +765,197 @@ export const useFmsStore = create<FmsStoreState>((set, get) => ({
     }
 
     // =========================================================================
-    // 4. ACT RTE (1/3 - 3/3)
+    // 4. ACT / MOD RTE (1/3 - 3/3) & MULTI-SCREEN DEPARTURE FLOW
     // =========================================================================
+    if (
+      state.activePage === 'DEPARTURE' ||
+      state.activePage === 'DEPARTURE_RUNWAYS' ||
+      state.activePage === 'DEPARTURE_SIDS' ||
+      state.activePage === 'DEPARTURE_TRANS'
+    ) {
+      const plan = state.modFlightPlan ?? state.flightPlan;
+      const apt = NAV_AIRPORTS[plan.origin] ?? NAV_AIRPORTS.SBGR;
+      const pending = state.pendingDeparture;
+      const hasPending = Boolean(pending.runway || pending.sid || pending.transition);
+
+      if (state.activePage === 'DEPARTURE') {
+        if (lsk === '1R') {
+          set({ activePage: 'DEPARTURE_RUNWAYS', subPageIndex: 1 });
+        } else if (lsk === '2R') {
+          set({ activePage: 'DEPARTURE_SIDS', subPageIndex: 1 });
+        } else if (lsk === '3R') {
+          set({ activePage: 'DEPARTURE_TRANS', subPageIndex: 1 });
+        } else if (lsk === '6L') {
+          if (hasPending) {
+            set({ pendingDeparture: { runway: null, sid: null, transition: null } });
+          } else {
+            set({ activePage: 'ACT_RTE', subPageIndex: 1 });
+          }
+        } else if (lsk === '6R') {
+          if (hasPending) {
+            const selRwy = pending.runway ?? plan.runway ?? apt.runways[0]?.ident ?? '09L';
+            const selSid = pending.sid ?? plan.sid;
+            const selTrans = pending.transition ?? plan.sidTransition ?? null;
+            const sidWptIds = selSid ? apt.sids[selSid] ?? [] : [];
+            const transWptIds =
+              selSid && selTrans
+                ? apt.sidTransitions?.[selSid]?.[selTrans] ?? []
+                : [];
+            const combinedIds = Array.from(new Set([...sidWptIds, ...transWptIds]));
+            const viaLabel =
+              selSid && selTrans ? `${selSid}.${selTrans}` : selSid ?? 'DIRECT';
+
+            const sidWpts: FmsWaypoint[] = combinedIds
+              .map((id, idx) => {
+                const pt = lookupNavPoint(id);
+                if (!pt) return null;
+                return {
+                  id: `wpt-sid-${pt.ident}-${Date.now()}-${idx}`,
+                  ident: pt.ident,
+                  type: pt.type,
+                  coordinates: { lat: pt.lat, lon: pt.lon },
+                  viaAirway: viaLabel,
+                  predictions: {
+                    etaUtc: '1218z',
+                    dtgNm: 18,
+                    cumulativeDtgNm: 18,
+                    efobKg: 13.8,
+                    predictedAltitudeFt: 10000,
+                  },
+                } as FmsWaypoint;
+              })
+              .filter((x): x is FmsWaypoint => x !== null);
+
+            const origWpt: FmsWaypoint = {
+              id: `wpt-orig-${Date.now()}`,
+              ident: `${apt.icao}${selRwy.replace(/^RW/, '')}`,
+              type: 'AIRPORT',
+              coordinates: { lat: apt.lat, lon: apt.lon },
+              viaAirway: 'ORIGIN',
+              predictions: plan.waypoints[0]?.predictions ?? {
+                etaUtc: '1214z',
+                dtgNm: 0,
+                cumulativeDtgNm: 0,
+                efobKg: 14.2,
+                predictedAltitudeFt: 3000,
+              },
+            };
+
+            const destWpt = plan.waypoints[plan.waypoints.length - 1];
+            const existingEnroute = plan.waypoints
+              .slice(1, -1)
+              .filter((w) => !combinedIds.includes(w.ident));
+
+            const nextWaypoints = destWpt
+              ? [origWpt, ...sidWpts, ...existingEnroute, destWpt]
+              : [origWpt, ...sidWpts, ...existingEnroute];
+
+            const modPlan = computeFlightPlanPredictions(
+              {
+                ...plan,
+                planType: 'MOD',
+                runway: selRwy.replace(/^RW/, ''),
+                sid: selSid ?? plan.sid,
+                sidTransition: selTrans,
+                waypoints: nextWaypoints,
+              },
+              state.weights.fuelOnBoard,
+              state.altitude.cruiseAltitudeFt,
+              state.speeds.activeSchedule.cruiseMach
+            );
+
+            const rwyObj = apt.runways.find(
+              (r) => r.ident === selRwy.replace(/^RW/, '')
+            );
+
+            set({
+              modFlightPlan: modPlan,
+              pendingDeparture: { runway: null, sid: null, transition: null },
+              activePage: 'ACT_RTE',
+              subPageIndex: 2,
+              takeoffConfig: rwyObj
+                ? { ...state.takeoffConfig, rwySlopePercent: rwyObj.slopePercent }
+                : state.takeoffConfig,
+            });
+            soundEngine.playConfirmChime();
+          } else {
+            set({ activePage: 'TAKEOFF_INIT', subPageIndex: 1 });
+          }
+        }
+        return;
+      }
+
+      if (state.activePage === 'DEPARTURE_RUNWAYS') {
+        if (lsk === '6R') {
+          set({ activePage: 'DEPARTURE', subPageIndex: 1 });
+          return;
+        }
+        const rowIdx = parseInt(lsk[0], 10) - 1;
+        const isRight = lsk[1] === 'R';
+        const rwyIdx = isRight ? rowIdx + 5 : rowIdx;
+        const chosen = apt.runways[rwyIdx];
+        if (chosen) {
+          set({
+            pendingDeparture: { ...pending, runway: chosen.ident },
+            activePage: 'DEPARTURE_SIDS',
+            subPageIndex: 1,
+          });
+        }
+        return;
+      }
+
+      if (state.activePage === 'DEPARTURE_SIDS') {
+        if (lsk === '6R') {
+          set({ activePage: 'DEPARTURE', subPageIndex: 1 });
+          return;
+        }
+        if (lsk === '1R') {
+          set({ activePage: 'DEPARTURE_RUNWAYS', subPageIndex: 1 });
+          return;
+        }
+        const rowIdx = parseInt(lsk[0], 10) - 1;
+        if (lsk[1] === 'L') {
+          const sids = Object.keys(apt.sids);
+          const chosenSid = sids[rowIdx];
+          if (chosenSid) {
+            const hasTransitions =
+              apt.sidTransitions &&
+              apt.sidTransitions[chosenSid] &&
+              Object.keys(apt.sidTransitions[chosenSid]).length > 0;
+            set({
+              pendingDeparture: {
+                ...pending,
+                sid: chosenSid,
+                transition: null,
+              },
+              activePage: hasTransitions ? 'DEPARTURE_TRANS' : 'DEPARTURE',
+              subPageIndex: 1,
+            });
+          }
+        }
+        return;
+      }
+
+      if (state.activePage === 'DEPARTURE_TRANS') {
+        if (lsk === '6R') {
+          set({ activePage: 'DEPARTURE', subPageIndex: 1 });
+          return;
+        }
+        const selSid = pending.sid ?? plan.sid ?? Object.keys(apt.sids)[0];
+        const transMap = (selSid && apt.sidTransitions?.[selSid]) || {};
+        const transList = Object.keys(transMap);
+        const rowIdx = parseInt(lsk[0], 10) - 1;
+        if (lsk[1] === 'L' && transList[rowIdx]) {
+          set({
+            pendingDeparture: { ...pending, transition: transList[rowIdx] },
+            activePage: 'DEPARTURE',
+            subPageIndex: 1,
+          });
+        }
+        return;
+      }
+    }
+
     if (state.activePage === 'ACT_RTE') {
       const plan = state.modFlightPlan ?? state.flightPlan;
 
@@ -771,11 +975,14 @@ export const useFmsStore = create<FmsStoreState>((set, get) => ({
             return;
           }
           const defaultRwy = apt.runways[0]?.ident ?? '09L';
+          const destWpt = plan.waypoints[plan.waypoints.length - 1];
           const updatedPlan = computeFlightPlanPredictions(
             {
               ...plan,
               origin: apt.icao,
               runway: defaultRwy,
+              sid: null,
+              sidTransition: null,
               waypoints: [
                 {
                   id: `wpt-orig-${Date.now()}`,
@@ -785,14 +992,14 @@ export const useFmsStore = create<FmsStoreState>((set, get) => ({
                   viaAirway: 'ORIGIN',
                   predictions: plan.waypoints[0].predictions,
                 },
-                ...plan.waypoints.slice(1),
+                ...(destWpt ? [destWpt] : []),
               ],
             },
             state.weights.fuelOnBoard,
             state.altitude.cruiseAltitudeFt,
             state.speeds.activeSchedule.cruiseMach
           );
-          set({ flightPlan: updatedPlan });
+          set({ flightPlan: updatedPlan, modFlightPlan: null });
           consumeScratchpad();
         } else if (lsk === '1R') {
           if (isDelete) {
@@ -808,31 +1015,41 @@ export const useFmsStore = create<FmsStoreState>((set, get) => ({
             state.pushMessage('INVALID ENTRY', 'HIGH');
             return;
           }
-          const newWpts = [...plan.waypoints];
-          newWpts[newWpts.length - 1] = {
+          const origWpt = plan.waypoints[0];
+          const destWpt: FmsWaypoint = {
             id: `wpt-dest-${Date.now()}`,
             ident: apt.icao,
             type: 'AIRPORT',
             coordinates: { lat: apt.lat, lon: apt.lon },
             viaAirway: 'DIRECT',
-            predictions: newWpts[newWpts.length - 1].predictions,
+            predictions: plan.waypoints[plan.waypoints.length - 1].predictions,
           };
           const updatedPlan = computeFlightPlanPredictions(
-            { ...plan, destination: apt.icao, waypoints: newWpts },
+            {
+              ...plan,
+              planType: 'MOD',
+              destination: apt.icao,
+              star: null,
+              starTransition: null,
+              approach: null,
+              companyRoute: `${plan.origin}-${apt.icao}`,
+              waypoints: [origWpt, destWpt],
+            },
             state.weights.fuelOnBoard,
             state.altitude.cruiseAltitudeFt,
             state.speeds.activeSchedule.cruiseMach
           );
-          set({ flightPlan: updatedPlan });
+          set({ modFlightPlan: updatedPlan });
           consumeScratchpad();
         } else if (lsk === '2L') {
           if (!sp) {
             downSelect(plan.runway ?? '');
             return;
           }
+          const cleanRwy = sp.replace(/^RW/, '');
           const originApt = NAV_AIRPORTS[plan.origin];
-          const rwyObj = originApt?.runways.find((r) => r.ident === sp);
-          if (!rwyObj && !/^\d{2}[LRC]?$/.test(sp)) {
+          const rwyObj = originApt?.runways.find((r) => r.ident === cleanRwy);
+          if (!rwyObj && !/^\d{2}[LRC]?$/.test(cleanRwy)) {
             state.pushMessage('INVALID ENTRY', 'HIGH');
             return;
           }
@@ -840,11 +1057,12 @@ export const useFmsStore = create<FmsStoreState>((set, get) => ({
           if (updatedWpts.length > 0 && updatedWpts[0].type === 'AIRPORT') {
             updatedWpts[0] = {
               ...updatedWpts[0],
-              ident: `${plan.origin}${sp}`,
+              ident: `${plan.origin}${cleanRwy}`,
             };
           }
+          const nextPlan = { ...plan, runway: cleanRwy, waypoints: updatedWpts };
           set({
-            flightPlan: { ...plan, runway: sp, waypoints: updatedWpts },
+            ...(state.modFlightPlan ? { modFlightPlan: nextPlan } : { flightPlan: nextPlan }),
             takeoffConfig: rwyObj
               ? {
                   ...state.takeoffConfig,
@@ -855,7 +1073,8 @@ export const useFmsStore = create<FmsStoreState>((set, get) => ({
           consumeScratchpad();
         } else if (lsk === '2R') {
           if (isDelete) {
-            set({ flightPlan: { ...plan, alternate: null } });
+            const nextPlan = { ...plan, alternate: null };
+            set(state.modFlightPlan ? { modFlightPlan: nextPlan } : { flightPlan: nextPlan });
             consumeScratchpad();
             return;
           }
@@ -867,9 +1086,10 @@ export const useFmsStore = create<FmsStoreState>((set, get) => ({
             state.pushMessage('INVALID ENTRY', 'HIGH');
             return;
           }
-          set({ flightPlan: { ...plan, alternate: sp } });
+          const nextPlan = { ...plan, alternate: sp };
+          set(state.modFlightPlan ? { modFlightPlan: nextPlan } : { flightPlan: nextPlan });
           consumeScratchpad();
-        } else if (lsk === '3L') {
+        } else if (lsk === '3L' || (lsk === '3R' && sp && NAV_COMPANY_ROUTES[sp])) {
           if (!sp) {
             downSelect(plan.companyRoute ?? '');
             return;
@@ -927,23 +1147,33 @@ export const useFmsStore = create<FmsStoreState>((set, get) => ({
             state.altitude.cruiseAltitudeFt,
             state.speeds.activeSchedule.cruiseMach
           );
-          set({ flightPlan: newPlan });
+          set({ flightPlan: newPlan, modFlightPlan: null });
           consumeScratchpad();
           soundEngine.playConfirmChime();
         } else if (lsk === '3R') {
           if (!sp) {
+            downSelect(plan.companyRoute ?? '');
+            return;
+          }
+          const nextPlan = { ...plan, companyRoute: sp };
+          set(state.modFlightPlan ? { modFlightPlan: nextPlan } : { flightPlan: nextPlan });
+          consumeScratchpad();
+        } else if (lsk === '5R') {
+          if (!sp) {
             downSelect(plan.flightId);
             return;
           }
-          if (!/^[A-Z0-9]{2,8}$/.test(sp)) {
+          if (!/^[A-Z0-9]{1,8}$/.test(sp)) {
             state.pushMessage('INVALID ENTRY', 'HIGH');
             return;
           }
-          set({ flightPlan: { ...plan, flightId: sp } });
+          const nextPlan = { ...plan, flightId: sp };
+          set(state.modFlightPlan ? { modFlightPlan: nextPlan } : { flightPlan: nextPlan });
           consumeScratchpad();
         } else if (lsk === '4L' || lsk === '5L') {
           if (isDelete) {
-            set({ flightPlan: { ...plan, lateralOffset: null } });
+            const nextPlan = { ...plan, lateralOffset: null };
+            set(state.modFlightPlan ? { modFlightPlan: nextPlan } : { flightPlan: nextPlan });
             consumeScratchpad();
             return;
           }
@@ -953,45 +1183,162 @@ export const useFmsStore = create<FmsStoreState>((set, get) => ({
               state.pushMessage('INVALID ENTRY', 'HIGH');
               return;
             }
-            set({ flightPlan: { ...plan, lateralOffset: offRes.value } });
+            const nextPlan = { ...plan, lateralOffset: offRes.value };
+            set(state.modFlightPlan ? { modFlightPlan: nextPlan } : { flightPlan: nextPlan });
             consumeScratchpad();
           }
         } else if (lsk === '6L') {
-          set({ activePage: 'PERF_INIT', subPageIndex: 1 });
+          if (state.modFlightPlan) {
+            set({ modFlightPlan: null, pendingAirway: null });
+          } else {
+            set({ activePage: 'PERF_INIT', subPageIndex: 1 });
+          }
         } else if (lsk === '6R') {
-          set({ subPageIndex: 2 });
+          if (state.modFlightPlan) {
+            set({
+              flightPlan: { ...state.modFlightPlan, planType: 'ACTIVE' },
+              modFlightPlan: null,
+              pendingAirway: null,
+            });
+            soundEngine.playConfirmChime();
+          } else {
+            set({ activePage: 'DEPARTURE', subPageIndex: 1 });
+          }
         }
-      } else {
-        // ACT RTE 2/3 (VIA / TO Airway String Entry)
-        if (lsk === '6L') {
-          set({ activePage: 'PERF_INIT', subPageIndex: 1 });
+        return;
+      }
+
+      // ACT / MOD ALTN RTE (3/3)
+      if (state.subPageIndex === 3) {
+        if ((lsk === '1R' || lsk === '2R') && sp) {
+          const pt = lookupNavPoint(sp);
+          if (!pt) {
+            state.pushMessage('INVALID ENTRY', 'HIGH');
+            return;
+          }
+          set({
+            modFlightPlan: {
+              ...plan,
+              planType: 'MOD',
+              alternateVia: pt.ident,
+            },
+          });
+          consumeScratchpad();
+        } else if (lsk === '6L') {
+          if (state.modFlightPlan) {
+            set({ modFlightPlan: null });
+          } else {
+            set({ activePage: 'ARRIVAL', subPageIndex: 1 });
+          }
         } else if (lsk === '6R') {
-          set({ subPageIndex: 1 });
-        } else if (sp && sp.includes('.')) {
-          const lastEnroute =
-            plan.waypoints.length >= 2
-              ? plan.waypoints[plan.waypoints.length - 2].ident
-              : plan.waypoints[0]?.ident;
-          const awyRes = parseAirwayEntry(sp, lastEnroute);
+          if (state.modFlightPlan) {
+            set({
+              flightPlan: { ...state.modFlightPlan, planType: 'ACTIVE' },
+              modFlightPlan: null,
+            });
+            soundEngine.playConfirmChime();
+          } else {
+            set({ activePage: 'PERF_INIT', subPageIndex: 1 });
+          }
+        }
+        return;
+      }
+
+      // ACT / MOD RTE 2/3 (VIA / TO Airway & Fix Entry)
+      if (lsk === '6L') {
+        if (state.modFlightPlan) {
+          set({ modFlightPlan: null, pendingAirway: null });
+        } else {
+          set({ activePage: 'ARRIVAL', subPageIndex: 1 });
+        }
+      } else if (lsk === '6R') {
+        if (state.modFlightPlan) {
+          set({
+            flightPlan: { ...state.modFlightPlan, planType: 'ACTIVE' },
+            modFlightPlan: null,
+            pendingAirway: null,
+          });
+          soundEngine.playConfirmChime();
+        } else {
+          set({ activePage: 'PERF_INIT', subPageIndex: 1 });
+        }
+      } else if (sp && sp.includes('.')) {
+        const lastEnroute =
+          plan.waypoints.length >= 2
+            ? plan.waypoints[plan.waypoints.length - 2].ident
+            : plan.waypoints[0]?.ident;
+        const awyRes = parseAirwayEntry(sp, lastEnroute);
+        if (!awyRes.valid || !awyRes.value) {
+          state.pushMessage(awyRes.error || 'INVALID ENTRY', 'HIGH');
+          return;
+        }
+        const newFixes: FmsWaypoint[] = [];
+        if (!plan.waypoints.some((w) => w.ident === awyRes.value!.startWpt)) {
+          const startPt = lookupNavPoint(awyRes.value.startWpt);
+          if (startPt) {
+            newFixes.push({
+              id: `wpt-awy-start-${Date.now()}`,
+              ident: startPt.ident,
+              type: startPt.type,
+              coordinates: { lat: startPt.lat, lon: startPt.lon },
+              viaAirway: 'DIRECT',
+              predictions: { etaUtc: '1225z', dtgNm: 20, cumulativeDtgNm: 40, efobKg: 13.5, predictedAltitudeFt: 28000 },
+            });
+          }
+        }
+        for (const item of awyRes.value.expandedWaypoints) {
+          const pt = lookupNavPoint(item.ident);
+          if (pt) {
+            newFixes.push({
+              id: `wpt-awy-${item.ident}-${Date.now()}`,
+              ident: pt.ident,
+              type: pt.type,
+              coordinates: { lat: pt.lat, lon: pt.lon },
+              viaAirway: item.viaAirway,
+              predictions: { etaUtc: '1235z', dtgNm: 30, cumulativeDtgNm: 70, efobKg: 13.0, predictedAltitudeFt: 28000 },
+            });
+          }
+        }
+        const destWpt = plan.waypoints[plan.waypoints.length - 1];
+        const updatedWpts = [
+          ...plan.waypoints.slice(0, -1),
+          ...newFixes,
+          destWpt,
+        ];
+        const updatedPlan = computeFlightPlanPredictions(
+          { ...plan, planType: 'MOD', waypoints: updatedWpts },
+          state.weights.fuelOnBoard,
+          state.altitude.cruiseAltitudeFt,
+          state.speeds.activeSchedule.cruiseMach
+        );
+        set({ modFlightPlan: updatedPlan, pendingAirway: null });
+        consumeScratchpad();
+        soundEngine.playConfirmChime();
+      } else if (sp && lsk[1] === 'L') {
+        // Left LSK on RTE 2/3: VIA airway identifier (e.g. 'J44' or 'J114' or 'UZ1')
+        if (!NAV_AIRWAYS[sp]) {
+          state.pushMessage('INVALID ENTRY', 'HIGH');
+          return;
+        }
+        set({
+          pendingAirway: sp,
+          modFlightPlan: state.modFlightPlan ?? { ...plan, planType: 'MOD' },
+        });
+        consumeScratchpad();
+      } else if (sp && lsk[1] === 'R') {
+        // Right LSK on RTE 2/3: TO waypoint (completes pendingAirway or inserts DIRECT leg)
+        const lastEnroute =
+          plan.waypoints.length >= 2
+            ? plan.waypoints[plan.waypoints.length - 2].ident
+            : plan.waypoints[0]?.ident;
+
+        if (state.pendingAirway) {
+          const awyRes = parseAirwayEntry(`${state.pendingAirway}.${sp}`, lastEnroute);
           if (!awyRes.valid || !awyRes.value) {
             state.pushMessage(awyRes.error || 'INVALID ENTRY', 'HIGH');
             return;
           }
           const newFixes: FmsWaypoint[] = [];
-          // If startWpt is not yet in the plan, insert it first
-          if (!plan.waypoints.some((w) => w.ident === awyRes.value!.startWpt)) {
-            const startPt = lookupNavPoint(awyRes.value.startWpt);
-            if (startPt) {
-              newFixes.push({
-                id: `wpt-awy-start-${Date.now()}`,
-                ident: startPt.ident,
-                type: startPt.type,
-                coordinates: { lat: startPt.lat, lon: startPt.lon },
-                viaAirway: 'DIRECT',
-                predictions: { etaUtc: '1225z', dtgNm: 20, cumulativeDtgNm: 40, efobKg: 13.5, predictedAltitudeFt: 28000 },
-              });
-            }
-          }
           for (const item of awyRes.value.expandedWaypoints) {
             const pt = lookupNavPoint(item.ident);
             if (pt) {
@@ -1012,15 +1359,45 @@ export const useFmsStore = create<FmsStoreState>((set, get) => ({
             destWpt,
           ];
           const updatedPlan = computeFlightPlanPredictions(
-            { ...plan, waypoints: updatedWpts },
+            { ...plan, planType: 'MOD', waypoints: updatedWpts },
             state.weights.fuelOnBoard,
             state.altitude.cruiseAltitudeFt,
             state.speeds.activeSchedule.cruiseMach
           );
-          set({ flightPlan: updatedPlan });
+          set({ modFlightPlan: updatedPlan, pendingAirway: null });
           consumeScratchpad();
           soundEngine.playConfirmChime();
+          return;
         }
+
+        const pt = lookupNavPoint(sp);
+        if (!pt) {
+          state.pushMessage('INVALID ENTRY', 'HIGH');
+          return;
+        }
+        const directWpt: FmsWaypoint = {
+          id: `wpt-dir-${pt.ident}-${Date.now()}`,
+          ident: pt.ident,
+          type: pt.type,
+          coordinates: { lat: pt.lat, lon: pt.lon },
+          viaAirway: 'DIRECT',
+          predictions: { etaUtc: '1230z', dtgNm: 25, cumulativeDtgNm: 60, efobKg: 13.2, predictedAltitudeFt: 28000 },
+        };
+        const destWpt = plan.waypoints[plan.waypoints.length - 1];
+        const updatedWpts = [
+          ...plan.waypoints.slice(0, -1),
+          directWpt,
+          destWpt,
+        ];
+        const updatedPlan = computeFlightPlanPredictions(
+          { ...plan, planType: 'MOD', waypoints: updatedWpts },
+          state.weights.fuelOnBoard,
+          state.altitude.cruiseAltitudeFt,
+          state.speeds.activeSchedule.cruiseMach
+        );
+        set({ modFlightPlan: updatedPlan });
+        consumeScratchpad();
+        soundEngine.playConfirmChime();
       }
       return;
     }
@@ -1745,7 +2122,6 @@ export const useFmsStore = create<FmsStoreState>((set, get) => ({
       state.activePage === 'CRUISE' ||
       state.activePage === 'DESCENT' ||
       state.activePage === 'LANDING' ||
-      state.activePage === 'DEPARTURE' ||
       state.activePage === 'ARRIVAL' ||
       state.activePage === 'FUEL_MGT' ||
       state.activePage === 'CONVERSION'
@@ -1893,6 +2269,8 @@ export const useFmsStore = create<FmsStoreState>((set, get) => ({
       },
       flightPlan: createDefaultFlightPlan(),
       modFlightPlan: null,
+      pendingDeparture: { runway: null, sid: null, transition: null },
+      pendingAirway: null,
       guidedStepIndex: 0,
     });
   },
@@ -1930,6 +2308,8 @@ export const useFmsStore = create<FmsStoreState>((set, get) => ({
       },
       flightPlan: createDefaultFlightPlan(),
       modFlightPlan: null,
+      pendingDeparture: { runway: null, sid: null, transition: null },
+      pendingAirway: null,
     });
   },
 }));

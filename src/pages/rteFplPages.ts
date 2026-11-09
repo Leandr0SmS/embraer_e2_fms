@@ -4,6 +4,7 @@
  * - ACTIVE FLT PLAN 1/X & MOD FLT PLAN (Page 4 Spec)
  */
 
+import { NAV_AIRPORTS } from '../data/navdb';
 import { FmsStoreState } from '../store/useFmsStore';
 import {
   FmsWaypoint,
@@ -73,90 +74,174 @@ function formatWaypointAltFuel(wpt: FmsWaypoint): {
 
 export function buildActRtePage(state: FmsStoreState): McduScreenLayout {
   const plan = state.modFlightPlan ?? state.flightPlan;
+  const isMod = Boolean(state.modFlightPlan);
 
   if (state.subPageIndex === 1) {
     const offsetLabel = plan.lateralOffset
       ? `${plan.lateralOffset.side} ${plan.lateralOffset.distanceNm.toFixed(1)} NM`
       : '<OFFSET';
+    const hasDest = Boolean(plan.destination);
+    const rwyDisplay = plan.runway
+      ? plan.runway.startsWith('RW')
+        ? plan.runway
+        : plan.runway
+      : '---';
 
     return {
-      title: state.modFlightPlan ? 'MOD RTE' : 'ACT RTE',
-      pageNumber: '1/3',
+      title: isMod ? 'MOD RTE' : 'ACT RTE',
+      titleColor: isMod ? 'YELLOW' : 'WHITE',
+      pageNumber: hasDest ? '1/3' : '1/2',
       rows: [
         {
           labelLeft: 'ORIGIN',
           labelRight: 'DEST',
           left: plan.origin || '□□□□',
           leftColor: 'GREEN',
-          right: plan.destination || '□□□□',
-          rightColor: 'GREEN',
+          right: plan.destination || '□□□□□',
+          rightColor: hasDest ? 'GREEN' : 'CYAN',
         },
         {
           labelLeft: 'RUNWAY',
-          labelRight: 'ALTN',
-          left: plan.runway || '---',
+          labelRight: hasDest ? 'ALTN DEST' : undefined,
+          left: rwyDisplay,
           leftColor: 'GREEN',
-          right: plan.alternate || '----',
-          rightColor: 'GREEN',
+          right: hasDest ? plan.alternate || '-----' : '',
+          rightColor: plan.alternate ? 'GREEN' : 'CYAN',
         },
         {
-          labelLeft: 'CO ROUTE',
-          labelRight: 'FLIGHT ID',
-          left: plan.companyRoute || '--------',
-          leftColor: 'GREEN',
-          right: plan.flightId || '-------',
-          rightColor: 'GREEN',
+          labelLeft: 'FPL REQST',
+          labelRight: 'CO ROUTE',
+          left: '<DLK FPL',
+          leftColor: 'WHITE',
+          right:
+            plan.companyRoute ||
+            (hasDest ? `${plan.origin}-${plan.destination}` : '--------'),
+          rightColor: plan.companyRoute || hasDest ? 'GREEN' : 'CYAN',
+        },
+        {
+          labelRight: 'FPL REPORT',
+          left: hasDest ? '<SEND' : '',
+          leftColor: 'WHITE',
         },
         {
           labelLeft: plan.lateralOffset ? 'LAT OFFSET' : undefined,
+          labelRight: 'FLIGHT ID',
           left: offsetLabel,
           leftColor: plan.lateralOffset ? 'GREEN' : 'WHITE',
-          right: 'IVATE>',
-          rightColor: 'CYAN',
-          rightSize: 'SMALL',
+          right: plan.flightId || '--------',
+          rightColor: plan.flightId ? 'GREEN' : 'CYAN',
         },
-        {
-          labelLeft: 'SID',
-          labelRight: 'STAR',
-          left: plan.sid ?? 'NONE',
-          leftColor: 'CYAN',
-          leftSize: 'SMALL',
-          right: plan.star ?? 'NONE',
-          rightColor: 'CYAN',
-          rightSize: 'SMALL',
-        },
-        {
-          left: '<PERF INIT',
-          leftColor: 'WHITE',
-          right: 'NEXT PAGE>',
-          rightColor: 'WHITE',
-        },
+        isMod
+          ? {
+              left: '<CANCEL',
+              leftColor: 'WHITE',
+              right: 'ACTIVATE>',
+              rightColor: 'WHITE',
+              rightReverse: true,
+            }
+          : {
+              left: '<FPL LIST',
+              leftColor: 'WHITE',
+              right: 'DEPARTURE>',
+              rightColor: 'WHITE',
+            },
       ],
     };
   }
 
-  // ACT RTE 2/3 & 3/3: VIA / TO Airway Legs
+  // ACT/MOD ALTN RTE (3/3)
+  if (state.subPageIndex === 3) {
+    const altnVia = plan.alternateVia;
+    return {
+      title: isMod ? 'MOD ALTN RTE' : 'ACT ALTN RTE',
+      titleColor: isMod ? 'YELLOW' : 'WHITE',
+      pageNumber: '3/3',
+      rows: [
+        {
+          labelLeft: 'VIA',
+          labelRight: 'TO',
+          left: 'DIRECT',
+          leftColor: 'GREEN',
+          right: altnVia || plan.alternate || '-----',
+          rightColor: plan.alternate ? 'GREEN' : 'CYAN',
+        },
+        altnVia
+          ? {
+              left: 'DIRECT',
+              leftColor: 'GREEN',
+              right: plan.alternate || '-----',
+              rightColor: 'GREEN',
+            }
+          : {},
+        {},
+        {},
+        {},
+        isMod
+          ? {
+              left: '<CANCEL',
+              leftColor: 'WHITE',
+              right: 'ACTIVATE>',
+              rightColor: 'WHITE',
+              rightReverse: true,
+            }
+          : {
+              left: '<ARRIVAL',
+              leftColor: 'WHITE',
+              right: 'PERF INIT>',
+              rightColor: 'WHITE',
+            },
+      ],
+    };
+  }
+
+  // ACT/MOD RTE 2/3: VIA / TO Airway & Procedure Legs
   const enrouteWpts = plan.waypoints.slice(1);
   const legRows: McduLskRow[] = [];
 
-  for (let i = 0; i < 4; i++) {
-    const w = enrouteWpts[i];
-    if (w) {
+  // Compress consecutive waypoints on the same airway/SID into VIA -> TO summary rows
+  const compressedLegs: Array<{ via: string; to: string }> = [];
+  for (const w of enrouteWpts) {
+    if (w.type === 'DISCONTINUITY') continue;
+    const via = w.viaAirway ?? 'DIRECT';
+    if (
+      compressedLegs.length > 0 &&
+      via !== 'DIRECT' &&
+      compressedLegs[compressedLegs.length - 1].via === via
+    ) {
+      compressedLegs[compressedLegs.length - 1].to = w.ident;
+    } else {
+      compressedLegs.push({ via, to: w.ident });
+    }
+  }
+
+  for (let i = 0; i < 5; i++) {
+    const leg = compressedLegs[i];
+    if (state.pendingAirway && i === Math.max(0, compressedLegs.length - 1)) {
       legRows.push({
         labelLeft: i === 0 ? 'VIA' : undefined,
         labelRight: i === 0 ? 'TO' : undefined,
-        left: w.viaAirway ?? 'DIRECT',
+        left: state.pendingAirway,
         leftColor: 'GREEN',
-        right: w.ident,
-        rightColor: 'GREEN',
-      });
-    } else if (i === enrouteWpts.length) {
-      legRows.push({
-        labelLeft: 'AIRWAY / WPT',
-        left: '-----.-----',
-        leftColor: 'CYAN',
-        leftSize: 'SMALL',
+        center: 'THEN',
+        centerColor: 'CYAN',
         right: '□□□□□',
+        rightColor: 'CYAN',
+      });
+      if (i + 1 < 5) {
+        legRows.push({
+          center: '>>DISCONTINUITY<<',
+          centerColor: 'WHITE',
+        });
+        i++;
+      }
+    } else if (leg) {
+      legRows.push({
+        labelLeft: i === 0 ? 'VIA' : undefined,
+        labelRight: i === 0 ? 'TO' : undefined,
+        left: leg.via,
+        leftColor: 'GREEN',
+        right: leg.to,
+        rightColor: 'GREEN',
       });
     } else {
       legRows.push({});
@@ -164,24 +249,196 @@ export function buildActRtePage(state: FmsStoreState): McduScreenLayout {
   }
 
   return {
-    title: state.modFlightPlan ? 'MOD RTE' : 'ACT RTE',
-    pageNumber: `${state.subPageIndex}/3`,
+    title: isMod ? 'MOD RTE' : 'ACT RTE',
+    titleColor: isMod ? 'YELLOW' : 'WHITE',
+    pageNumber: '2/3',
     rows: [
       legRows[0] ?? {},
       legRows[1] ?? {},
       legRows[2] ?? {},
       legRows[3] ?? {},
+      legRows[4] ?? {},
+      isMod
+        ? {
+            left: '<CANCEL',
+            leftColor: 'WHITE',
+            right: 'ACTIVATE>',
+            rightColor: 'WHITE',
+            rightReverse: true,
+          }
+        : {
+            left: '<ARRIVAL',
+            leftColor: 'WHITE',
+            right: 'PERF INIT>',
+            rightColor: 'WHITE',
+          },
+    ],
+  };
+}
+
+export function buildDeparturePages(state: FmsStoreState): McduScreenLayout {
+  const plan = state.modFlightPlan ?? state.flightPlan;
+  const apt = NAV_AIRPORTS[plan.origin] ?? NAV_AIRPORTS.SBGR;
+  const pending = state.pendingDeparture;
+  const hasPending = Boolean(pending.runway || pending.sid || pending.transition);
+
+  if (state.activePage === 'DEPARTURE_RUNWAYS') {
+    const rwys = apt.runways;
+    const rows: McduLskRow[] = [];
+    for (let i = 0; i < 5; i++) {
+      const leftRwy = rwys[i];
+      const rightRwy = rwys[i + 5];
+      rows.push({
+        left: leftRwy ? `<RW${leftRwy.ident}` : undefined,
+        leftColor: 'GREEN',
+        right: rightRwy ? `RW${rightRwy.ident}>` : undefined,
+        rightColor: 'GREEN',
+      });
+    }
+    rows.push({
+      right: 'DEPARTURE>',
+      rightColor: 'WHITE',
+    });
+    return {
+      title: `${apt.icao} RUNWAYS`,
+      pageNumber: '1/1',
+      rows: [
+        rows[0] ?? {},
+        rows[1] ?? {},
+        rows[2] ?? {},
+        rows[3] ?? {},
+        rows[4] ?? {},
+        rows[5] ?? {},
+      ],
+    };
+  }
+
+  if (state.activePage === 'DEPARTURE_SIDS') {
+    const sids = Object.keys(apt.sids);
+    const selRwy = pending.runway ?? plan.runway ?? apt.runways[0]?.ident ?? '09L';
+    const rows: McduLskRow[] = [];
+    for (let i = 0; i < 5; i++) {
+      const sidName = sids[i];
+      rows.push({
+        labelRight: i === 0 ? 'RUNWAY' : undefined,
+        left: sidName ? `<${sidName}` : undefined,
+        leftColor: 'GREEN',
+        right: i === 0 ? `RW${selRwy.replace(/^RW/, '')}>` : undefined,
+        rightColor: 'CYAN',
+      });
+    }
+    rows.push({
+      right: 'DEPARTURE>',
+      rightColor: 'WHITE',
+      rightReverse: true,
+    });
+    return {
+      title: `${apt.icao} SIDs`,
+      pageNumber: '1/1',
+      rows: [
+        rows[0] ?? {},
+        rows[1] ?? {},
+        rows[2] ?? {},
+        rows[3] ?? {},
+        rows[4] ?? {},
+        rows[5] ?? {},
+      ],
+    };
+  }
+
+  if (state.activePage === 'DEPARTURE_TRANS') {
+    const selSid = pending.sid ?? plan.sid ?? Object.keys(apt.sids)[0] ?? 'OMNI';
+    const selRwy = pending.runway ?? plan.runway ?? apt.runways[0]?.ident ?? '09L';
+    const transMap = apt.sidTransitions?.[selSid] ?? {};
+    const transNames = Object.keys(transMap);
+    const rows: McduLskRow[] = [];
+    for (let i = 0; i < 5; i++) {
+      const tName = transNames[i];
+      rows.push({
+        labelRight: i === 0 ? 'RUNWAY' : i === 1 ? 'SID' : undefined,
+        left: tName ? `<${tName}` : undefined,
+        leftColor: 'GREEN',
+        right:
+          i === 0
+            ? `RW${selRwy.replace(/^RW/, '')}>`
+            : i === 1
+              ? `${selSid}>`
+              : undefined,
+        rightColor: 'CYAN',
+      });
+    }
+    rows.push({
+      right: 'DEPARTURE>',
+      rightColor: 'WHITE',
+      rightReverse: true,
+    });
+    return {
+      title: `${apt.icao} SID TRANS`,
+      pageNumber: '1/1',
+      rows: [
+        rows[0] ?? {},
+        rows[1] ?? {},
+        rows[2] ?? {},
+        rows[3] ?? {},
+        rows[4] ?? {},
+        rows[5] ?? {},
+      ],
+    };
+  }
+
+  // Default: <ORIGIN> DEPARTURE 1/1
+  const actRwy = plan.runway ? `RW${plan.runway.replace(/^RW/, '')}` : '----';
+  const selRwy = pending.runway ? `RW${pending.runway.replace(/^RW/, '')}>` : 'RUNWAY>';
+  const actSid = plan.sid || '------';
+  const selSid = pending.sid ? `${pending.sid}>` : 'SID>';
+  const actTrans = plan.sidTransition || '------';
+  const selTrans = pending.transition ? `${pending.transition}>` : 'TRANS>';
+
+  return {
+    title: `${apt.icao} DEPARTURE`,
+    pageNumber: '1/1',
+    rows: [
       {
-        labelCenter: 'AIRWAY STRING SYNTAX: START.AWY.END',
-        center: 'EX: GUP.J102.ALS',
-        centerColor: 'CYAN',
+        labelLeft: 'RUNWAY',
+        labelCenter: 'ACTIVE  SELECTED',
+        labelRight: 'RUNWAY',
+        left: actRwy,
+        leftColor: 'GREEN',
+        right: selRwy,
+        rightColor: pending.runway ? 'CYAN' : 'WHITE',
       },
       {
-        left: '<PERF INIT',
-        leftColor: 'WHITE',
-        right: 'RTE 1/3>',
-        rightColor: 'WHITE',
+        labelLeft: 'SID',
+        labelRight: 'SID',
+        left: actSid,
+        leftColor: 'GREEN',
+        right: selSid,
+        rightColor: pending.sid ? 'CYAN' : 'WHITE',
       },
+      {
+        labelLeft: 'TRANSITION',
+        labelRight: 'TRANSITION',
+        left: actTrans,
+        leftColor: 'GREEN',
+        right: selTrans,
+        rightColor: pending.transition ? 'CYAN' : 'WHITE',
+      },
+      {},
+      {},
+      hasPending
+        ? {
+            left: '<CLEAR SEL',
+            leftColor: 'WHITE',
+            right: 'APPLY>',
+            rightColor: 'WHITE',
+            rightReverse: true,
+          }
+        : {
+            left: '<RTE',
+            leftColor: 'WHITE',
+            right: 'TAKEOFF>',
+            rightColor: 'WHITE',
+          },
     ],
   };
 }
