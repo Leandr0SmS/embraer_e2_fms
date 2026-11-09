@@ -112,6 +112,7 @@ export interface FmsSpeedData {
     vr: number | null;   // Rotate speed
     v2: number | null;   // Takeoff safety speed
     vfs: number | null;  // Final segment speed
+    toPitchDeg?: number | null; // Computed Takeoff Pitch target (e.g. 8.2)
   };
   /** Landing Reference and Approach Speeds in KCAS */
   landingSpeeds: {

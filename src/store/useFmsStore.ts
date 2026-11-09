@@ -625,7 +625,11 @@ export const useFmsStore = create<FmsStoreState>((set, get) => ({
       case 'PREV': {
         const delta = key === 'NEXT' ? 1 : -1;
         let maxPages = 1;
-        if (state.activePage === 'PERF_INDEX' || state.activePage === 'NAV_INDEX') {
+        if (
+          state.activePage === 'PERF_INDEX' ||
+          state.activePage === 'NAV_INDEX' ||
+          state.activePage === 'TAKEOFF_INIT'
+        ) {
           maxPages = 2;
         } else if (
           state.activePage === 'PERF_INIT' ||
@@ -633,19 +637,6 @@ export const useFmsStore = create<FmsStoreState>((set, get) => ({
           state.activePage === 'PROGRESS'
         ) {
           maxPages = 3;
-        } else if (
-          state.activePage === 'TAKEOFF_INIT' ||
-          state.activePage === 'TAKEOFF_VSPEEDS'
-        ) {
-          // Toggle between TAKEOFF INIT (1/2) and TAKEOFF VSPEEDS (2/2)
-          set({
-            activePage:
-              state.activePage === 'TAKEOFF_INIT'
-                ? 'TAKEOFF_VSPEEDS'
-                : 'TAKEOFF_INIT',
-            subPageIndex: 1,
-          });
-          return;
         } else if (state.activePage === 'ACTIVE_FLT_PLAN') {
           const plan = state.modFlightPlan ?? state.flightPlan;
           maxPages = Math.max(1, Math.ceil(plan.waypoints.length / 4));
@@ -2141,12 +2132,50 @@ export const useFmsStore = create<FmsStoreState>((set, get) => ({
     }
 
     // =========================================================================
-    // 8. TAKEOFF INIT (1/2)
+    // 8. TAKEOFF INIT (1/2 & 2/2) & TAKEOFF FLAPS (1/1)
     // =========================================================================
+    if (state.activePage === 'TAKEOFF_FLAPS') {
+      if (lsk === '1R') {
+        set({ activePage: 'TAKEOFF_INIT', subPageIndex: 2 });
+      } else if (lsk === '1L' || lsk === '2L' || lsk === '3L' || lsk === '4L') {
+        const f = parseInt(lsk[0], 10) as 1 | 2 | 3 | 4;
+        set({
+          takeoffConfig: { ...state.takeoffConfig, flap: f },
+          activePage: 'TAKEOFF_INIT',
+          subPageIndex: 2,
+        });
+      }
+      return;
+    }
+
     if (state.activePage === 'TAKEOFF_INIT') {
+      if (state.subPageIndex === 2) {
+        if (lsk === '1R') {
+          set({ activePage: 'TAKEOFF_FLAPS', subPageIndex: 1 });
+        } else if (lsk === '2L' && sp) {
+          const cgRes = parseTakeoffCg(sp);
+          if (!cgRes.valid || cgRes.value === undefined) {
+            state.pushMessage(cgRes.error || 'CHECK TAKEOFF CG', 'HIGH');
+            return;
+          }
+          set({ weights: { ...state.weights, takeoffCg: cgRes.value } });
+          consumeScratchpad();
+        } else if (lsk === '6L') {
+          set({ activePage: 'TO_DATASET', subPageIndex: 1 });
+        } else if (lsk === '6R') {
+          set({ activePage: 'TAKEOFF_VSPEEDS', subPageIndex: 1 });
+        }
+        return;
+      }
+
       if (lsk === '2L') {
-        // OAT entry
-        if (!sp) return downSelect(`${state.atmosphere.surfaceOatC}`);
+        if (!sp) return downSelect(`${state.atmosphere.altimeter.value}`);
+        const qRes = parseAltimeterInput(sp);
+        if (qRes.valid && qRes.value) {
+          set({ atmosphere: { ...state.atmosphere, altimeter: qRes.value } });
+          consumeScratchpad();
+          return;
+        }
         const oatRes = parseTemperatureInput(sp, 'OAT');
         if (!oatRes.valid || oatRes.value === undefined) {
           state.pushMessage('INVALID ENTRY', 'HIGH');
@@ -2154,19 +2183,21 @@ export const useFmsStore = create<FmsStoreState>((set, get) => ({
         }
         set({ atmosphere: { ...state.atmosphere, surfaceOatC: oatRes.value } });
         consumeScratchpad();
-      } else if (lsk === '2R') {
-        // SURFACE WIND
-        if (!sp) {
+      } else if (lsk === '3R' || lsk === '2R') {
+        // WIND at 3R (and legacy 2R fallback)
+        if (!sp && lsk === '3R') {
           const sw = state.atmosphere.surfaceWind;
           return downSelect(`${sw.direction}/${sw.speed}`);
         }
-        const wRes = parseWindInput(sp);
-        if (!wRes.valid || !wRes.value) {
-          state.pushMessage('INVALID ENTRY', 'HIGH');
-          return;
+        if (sp) {
+          const wRes = parseWindInput(sp);
+          if (!wRes.valid || !wRes.value) {
+            state.pushMessage('INVALID ENTRY', 'HIGH');
+            return;
+          }
+          set({ atmosphere: { ...state.atmosphere, surfaceWind: wRes.value } });
+          consumeScratchpad();
         }
-        set({ atmosphere: { ...state.atmosphere, surfaceWind: wRes.value } });
-        consumeScratchpad();
       } else if (lsk === '3L') {
         // RWY SLOPE
         if (!sp) return downSelect(`${state.takeoffConfig.rwySlopePercent}`);
@@ -2179,17 +2210,40 @@ export const useFmsStore = create<FmsStoreState>((set, get) => ({
           takeoffConfig: { ...state.takeoffConfig, rwySlopePercent: slRes.value },
         });
         consumeScratchpad();
-      } else if (lsk === '3R') {
-        // Toggle RWY COND: DRY -> WET -> CNTMNTD
+      } else if (lsk === '4L') {
+        // Toggle RWY CONDITION at 4L (<-DRY/WET/CNTMNTD) or AFE LIMIT if numeric sp
+        if (sp) {
+          const altRes = parseMCDUAltitudeInput(sp);
+          if (altRes.valid && altRes.feet) {
+            set({ altitude: { ...state.altitude, afeLimitFt: altRes.feet } });
+            consumeScratchpad();
+            return;
+          }
+        }
         const order: Array<'DRY' | 'WET' | 'CNTMNTD'> = ['DRY', 'WET', 'CNTMNTD'];
         const nextCond =
           order[(order.indexOf(state.takeoffConfig.rwyCondition) + 1) % order.length];
         set({
           takeoffConfig: { ...state.takeoffConfig, rwyCondition: nextCond },
         });
-      } else if (lsk === '4L') {
-        // AFE LIMIT
-        if (!sp) return downSelect(`${state.altitude.afeLimitFt}`);
+      } else if (lsk === '6L') {
+        set({ activePage: 'PERF_INIT', subPageIndex: 2 });
+      } else if (lsk === '6R') {
+        set({ subPageIndex: 2 });
+      }
+      return;
+    }
+
+    // =========================================================================
+    // 9. TAKEOFF 1/1 (TAKEOFF_VSPEEDS) & DEPARTURE LIMIT 1/1
+    // =========================================================================
+    if (state.activePage === 'DEPARTURE_LIMIT') {
+      if (lsk === '1L' && sp) {
+        set({
+          altitude: { ...state.altitude, departureSpeedLimit: sp },
+        });
+        consumeScratchpad();
+      } else if (lsk === '2L' && sp) {
         const altRes = parseMCDUAltitudeInput(sp);
         if (!altRes.valid || !altRes.feet) {
           state.pushMessage('INVALID ENTRY', 'HIGH');
@@ -2197,9 +2251,7 @@ export const useFmsStore = create<FmsStoreState>((set, get) => ({
         }
         set({ altitude: { ...state.altitude, afeLimitFt: altRes.feet } });
         consumeScratchpad();
-      } else if (lsk === '4R') {
-        // VNAV CAP AFE
-        if (!sp) return downSelect(`${state.altitude.vnavCaptureAfeFt}`);
+      } else if (lsk === '3L' && sp) {
         const altRes = parseMCDUAltitudeInput(sp);
         if (!altRes.valid || !altRes.feet) {
           state.pushMessage('INVALID ENTRY', 'HIGH');
@@ -2207,17 +2259,32 @@ export const useFmsStore = create<FmsStoreState>((set, get) => ({
         }
         set({ altitude: { ...state.altitude, vnavCaptureAfeFt: altRes.feet } });
         consumeScratchpad();
+      } else if (lsk === '4L' && sp) {
+        const altRes = parseMCDUAltitudeInput(sp);
+        if (!altRes.valid || !altRes.feet) {
+          state.pushMessage('INVALID ENTRY', 'HIGH');
+          return;
+        }
+        set({
+          altitude: { ...state.altitude, vnavCaptureEoAfeFt: altRes.feet },
+        });
+        consumeScratchpad();
+      } else if (lsk === '4R' && sp) {
+        const bank = parseInt(sp, 10);
+        if (isNaN(bank) || bank < 10 || bank > 30) {
+          state.pushMessage('INVALID ENTRY', 'HIGH');
+          return;
+        }
+        set({ altitude: { ...state.altitude, eoBankLimitDeg: bank } });
+        consumeScratchpad();
       } else if (lsk === '6L') {
-        set({ activePage: 'PERF_INIT', subPageIndex: 2 });
-      } else if (lsk === '6R') {
         set({ activePage: 'TAKEOFF_VSPEEDS', subPageIndex: 1 });
+      } else if (lsk === '6R') {
+        set({ activePage: 'ACTIVE_FLT_PLAN', subPageIndex: 1 });
       }
       return;
     }
 
-    // =========================================================================
-    // 9. TAKEOFF VSPEEDS (2/2)
-    // =========================================================================
     if (state.activePage === 'TAKEOFF_VSPEEDS') {
       const updateVSpeed = (field: 'v1' | 'vr' | 'v2' | 'vfs') => {
         if (!sp) {
@@ -2233,6 +2300,7 @@ export const useFmsStore = create<FmsStoreState>((set, get) => ({
         const nextSpeeds = {
           ...state.speeds.takeoffSpeeds,
           [field]: spdRes.value,
+          toPitchDeg: 8.2,
         };
         set({
           speeds: {
@@ -2251,42 +2319,17 @@ export const useFmsStore = create<FmsStoreState>((set, get) => ({
       else if (lsk === '2L') updateVSpeed('vr');
       else if (lsk === '3L') updateVSpeed('v2');
       else if (lsk === '4L') updateVSpeed('vfs');
-      else if (lsk === '1R') {
-        // Toggle FLAP 1 / 2 / 3 / 4 or enter via scratchpad
-        if (sp) {
-          const f = parseInt(sp, 10);
-          if (f >= 1 && f <= 4) {
-            set({
-              takeoffConfig: { ...state.takeoffConfig, flap: f as 1 | 2 | 3 | 4 },
-            });
-            consumeScratchpad();
-          } else {
-            state.pushMessage('INVALID ENTRY', 'HIGH');
-          }
-        } else {
-          const nextFlap = ((state.takeoffConfig.flap % 4) + 1) as 1 | 2 | 3 | 4;
-          set({ takeoffConfig: { ...state.takeoffConfig, flap: nextFlap } });
-        }
-      } else if (lsk === '3R') {
-        // TO FLEX temp
-        if (!sp) return downSelect(`${state.atmosphere.flexTemperatureC ?? 48}`);
-        const flex = parseInt(sp, 10);
-        if (isNaN(flex) || flex < 30 || flex > 65) {
-          state.pushMessage('INVALID ENTRY', 'HIGH');
-          return;
-        }
-        set({ atmosphere: { ...state.atmosphere, flexTemperatureC: flex } });
-        consumeScratchpad();
-      } else if (lsk === '4R') {
-        // Cycle TO-1 / TO-2 / TO-3
-        const modes: Array<'TO-1' | 'TO-2' | 'TO-3'> = ['TO-1', 'TO-2', 'TO-3'];
-        const nextM =
-          modes[(modes.indexOf(state.takeoffConfig.thrustMode) + 1) % modes.length];
-        set({ takeoffConfig: { ...state.takeoffConfig, thrustMode: nextM } });
+      else if (lsk === '2R' || lsk === '1R') {
+        const nextFlap = ((state.takeoffConfig.flap % 4) + 1) as 1 | 2 | 3 | 4;
+        set({ takeoffConfig: { ...state.takeoffConfig, flap: nextFlap } });
+      } else if (lsk === '5L') {
+        set({ activePage: 'LANDING', subPageIndex: 1 });
+      } else if (lsk === '5R') {
+        set({ activePage: 'CLIMB', subPageIndex: 1 });
       } else if (lsk === '6L') {
-        set({ activePage: 'TAKEOFF_INIT', subPageIndex: 1 });
+        set({ activePage: 'TAKEOFF_INIT', subPageIndex: 2 });
       } else if (lsk === '6R') {
-        set({ activePage: 'ACTIVE_FLT_PLAN', subPageIndex: 1 });
+        set({ activePage: 'DEPARTURE_LIMIT', subPageIndex: 1 });
       }
       return;
     }

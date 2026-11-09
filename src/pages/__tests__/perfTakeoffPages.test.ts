@@ -98,21 +98,39 @@ describe('Performance, Cruise Modes, T/O Dataset & Takeoff Pages (Step 8 & Step 
     expect(td2.rows[4].leftReverse).toBe(false);
   });
 
-  it('builds TAKEOFF INIT 1/2 and TAKEOFF VSPEEDS 2/2 with reverse video when V1 > VR', () => {
+  it('builds TAKEOFF INIT 1/2, TAKEOFF INIT 2/2, TAKEOFF FLAPS 1/1, TAKEOFF 1/1, and DEPARTURE LIMIT 1/1', () => {
     useFmsStore.getState().resetToInitializedPreflight();
-    const toInit = buildTakeoffInitPage(useFmsStore.getState());
-    expect(toInit.title).toBe('TAKEOFF INIT');
-    expect(toInit.rows[0].left).toBe('093° / 2459FT');
-    expect(toInit.rows[0].right).toBe('51.8');
+    const toInit1 = buildTakeoffInitPage(useFmsStore.getState());
+    expect(toInit1.title).toBe('TAKEOFF INIT');
+    expect(toInit1.pageNumber).toBe('1/2');
+    expect(toInit1.rows[0].left).toBe('093°');
+    expect(toInit1.rows[0].right).toBe('51800KG');
+    expect(toInit1.rows[3].left).toBe('<-DRY/WET/CNTMNTD');
+
+    // Navigate to TAKEOFF INIT 2/2, open TAKEOFF FLAPS (1R), select FLAP-3 (3L)
+    useFmsStore.getState().navigateToPage('TAKEOFF_INIT', 2);
+    useFmsStore.getState().pressLsk('1R');
+    expect(useFmsStore.getState().activePage).toBe('TAKEOFF_FLAPS');
+    useFmsStore.getState().pressLsk('3L');
+    expect(useFmsStore.getState().activePage).toBe('TAKEOFF_INIT');
+    expect(useFmsStore.getState().takeoffConfig.flap).toBe(3);
 
     const vsOk = buildTakeoffVspeedsPage(useFmsStore.getState());
+    expect(vsOk.title).toBe('TAKEOFF');
+    expect(vsOk.pageNumber).toBe('1/1');
     expect(vsOk.rows[0].left).toBe('134 KT');
     expect(vsOk.rows[0].leftReverse).toBe(false);
+    expect(vsOk.rows[3].right).toBe('8.2°');
+    expect(vsOk.rows[5].right).toBe('DEP LIM>');
 
     // Inject V-Speed mismatch (V1 = 144 > VR = 138)
     useFmsStore.getState().injectFaultScenario('VSPEED_MISMATCH');
     const vsBad = buildTakeoffVspeedsPage(useFmsStore.getState());
     expect(vsBad.rows[0].leftReverse).toBe(true); // V1 reverse video
     expect(vsBad.rows[1].leftReverse).toBe(true); // VR reverse video
+
+    // Press 6R (DEP LIM>) -> opens DEPARTURE LIMIT 1/1
+    useFmsStore.getState().pressLsk('6R');
+    expect(useFmsStore.getState().activePage).toBe('DEPARTURE_LIMIT');
   });
 });

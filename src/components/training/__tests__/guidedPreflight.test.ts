@@ -43,13 +43,17 @@ describe('Guided Preflight Sequence & Instructor Fault Scenarios (Step 10)', () 
     useFmsStore.getState().pressLsk('6L'); // <CONFIRM INIT
     expect(useFmsStore.getState().perfInitConfirmed).toBe(true);
 
-    // Step 5: Push 6R (TAKEOFF INIT>) -> opens TAKEOFF INIT 1/2, then push 6R (TAKEOFF VSPEEDS>)
+    // Step 5: Push 6R (TAKEOFF INIT>) -> opens TAKEOFF INIT 1/2, push 6R (NEXT PAGE>) -> 2/2, push 6R (TAKEOFF>)
     useFmsStore.getState().pressLsk('6R');
     expect(useFmsStore.getState().activePage).toBe('TAKEOFF_INIT');
     useFmsStore.getState().pressLsk('6R');
+    expect(useFmsStore.getState().subPageIndex).toBe(2);
+    useFmsStore.getState().pressLsk('6R');
     expect(useFmsStore.getState().activePage).toBe('TAKEOFF_VSPEEDS');
 
-    // Step 6: Push 6R (ACTIVE FLT PLAN>) -> completes preflight
+    // Step 6: Push 6R (DEP LIM>) -> opens DEPARTURE LIMIT 1/1, then push 6R (FLT PLAN>) -> completes preflight
+    useFmsStore.getState().pressLsk('6R');
+    expect(useFmsStore.getState().activePage).toBe('DEPARTURE_LIMIT');
     useFmsStore.getState().pressLsk('6R');
     expect(useFmsStore.getState().activePage).toBe('ACTIVE_FLT_PLAN');
 

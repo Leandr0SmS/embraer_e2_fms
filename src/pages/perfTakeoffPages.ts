@@ -373,65 +373,166 @@ export function buildTakeoffInitPage(state: FmsStoreState): McduScreenLayout {
     originApt.runways.find((r) => r.ident === state.flightPlan.runway) ??
     originApt.runways[0];
 
-  const hdgStr = String(rwyObj?.headingDeg ?? 93).padStart(3, '0');
-  const elevFt = rwyObj?.elevationFt ?? 2459;
-  const gwStr =
-    state.weights.grossWeight !== null
-      ? state.weights.grossWeight.toFixed(1)
-      : '51.8';
+  if (state.subPageIndex === 2) {
+    const cgVal = state.weights.takeoffCg ?? 29.0;
+    const oatSign = state.atmosphere.surfaceOatC >= 0 ? '+' : '-';
+    const oatStr = `${oatSign}${Math.abs(state.atmosphere.surfaceOatC)}°C`;
+    const td = state.toDataset;
+    const flexTempStr = td.flexTakeoff ? `+${td.flexTempC}°C` : '---';
 
-  const oatSign = state.atmosphere.surfaceOatC >= 0 ? '+' : '-';
-  const oatStr = `${oatSign}${String(Math.abs(state.atmosphere.surfaceOatC)).padStart(2, '0')}°C`;
+    return {
+      title: 'TAKEOFF INIT',
+      pageNumber: '2/2',
+      rows: [
+        {
+          labelLeft: 'FLAPS',
+          left: `FLAP ${state.takeoffConfig.flap}`,
+          leftColor: 'GREEN',
+          right: 'OR>',
+          rightColor: 'WHITE',
+        },
+        {
+          labelLeft: 'TO CG',
+          labelRight: 'TO TEMP',
+          left: `${cgVal.toFixed(1)}%`,
+          leftColor: 'GREEN',
+          right: oatStr,
+          rightColor: 'GREEN',
+        },
+        {
+          labelCenter: 'MODE<-FLEX TO-->TEMP',
+          left: td.flexTakeoff ? 'ON' : 'OFF',
+          leftColor: 'GREEN',
+          right: flexTempStr,
+          rightColor: 'GREEN',
+        },
+        {
+          labelCenter: 'MODE<-DATASET->ATTCS',
+          left: state.takeoffConfig.thrustMode,
+          leftColor: 'GREEN',
+          right: td.attcs ? 'ON' : 'OFF',
+          rightColor: 'GREEN',
+        },
+        {},
+        {
+          left: '<TO DATASET',
+          leftColor: 'WHITE',
+          right: 'TAKEOFF>',
+          rightColor: 'WHITE',
+        },
+      ],
+    };
+  }
+
+  const hdgDeg = rwyObj?.headingDeg ?? 93;
+  const hdgStr = String(hdgDeg).padStart(3, '0');
+  const elevFt = rwyObj?.elevationFt ?? 2459;
+  const gwKg =
+    state.weights.grossWeight !== null
+      ? Math.round(state.weights.grossWeight * 1000)
+      : 51800;
+
+  const baro = state.atmosphere.altimeter;
+  const baroStr =
+    baro.unit === 'INHG' ? baro.value.toFixed(2) : `${baro.value}`;
 
   const sw = state.atmosphere.surfaceWind;
-  const swStr = `${String(sw.direction).padStart(3, '0')}° / ${String(sw.speed).padStart(2, '0')}`;
+  const swStr = `${String(sw.direction).padStart(3, '0')}°/${String(sw.speed).padStart(2, '0')}`;
+
+  // Compute headwind/tailwind and crosswind components relative to runway heading
+  const relAngleRad = ((sw.direction - hdgDeg) * Math.PI) / 180;
+  const hwComp = Math.round(sw.speed * Math.cos(relAngleRad));
+  const xwComp = Math.round(sw.speed * Math.sin(relAngleRad));
+  const hwArrow = hwComp >= 0 ? '↓' : '↑';
+  const xwArrow = xwComp >= 0 ? '←' : '→';
+  const windCompStr = `${hwArrow}${Math.abs(hwComp)} ${xwArrow}${Math.abs(xwComp)}`;
 
   const slopeSign = state.takeoffConfig.rwySlopePercent >= 0 ? '+' : '-';
   const slopeStr = `${slopeSign}${Math.abs(state.takeoffConfig.rwySlopePercent).toFixed(1)}%`;
+
+  const cond = state.takeoffConfig.rwyCondition;
+  const condStr =
+    cond === 'DRY'
+      ? '<-DRY/WET/CNTMNTD'
+      : cond === 'WET'
+        ? 'DRY/<-WET/CNTMNTD'
+        : 'DRY/WET/<-CNTMNTD';
 
   return {
     title: 'TAKEOFF INIT',
     pageNumber: '1/2',
     rows: [
       {
-        labelLeft: 'RWY HDG / ELEV',
-        labelRight: 'TAKEOFF GW',
-        left: `${hdgStr}° / ${elevFt}FT`,
+        labelLeft: 'RWY HDG',
+        labelRight: 'GROSS WT',
+        left: `${hdgStr}°`,
         leftColor: 'GREEN',
-        right: gwStr,
+        right: `${gwKg}KG`,
         rightColor: 'GREEN',
       },
       {
-        labelLeft: 'PRESS ALT / OAT',
-        labelRight: 'SURFACE WIND',
-        left: `${state.takeoffConfig.pressAltFt}FT / ${oatStr}`,
+        labelLeft: 'P ALT/B SET',
+        labelRight: 'ELEV',
+        left: `${state.takeoffConfig.pressAltFt}/${baroStr}`,
+        leftColor: 'GREEN',
+        right: `${elevFt}`,
+        rightColor: 'GREEN',
+      },
+      {
+        labelLeft: 'RWY SLOPE',
+        labelRight: 'WIND',
+        left: slopeStr,
         leftColor: 'GREEN',
         right: swStr,
         rightColor: 'GREEN',
       },
       {
-        labelLeft: 'RWY SLOPE',
-        labelRight: 'RWY COND',
-        left: slopeStr,
+        labelLeft: 'RWY CONDITION',
+        labelRight: 'WIND',
+        left: condStr,
         leftColor: 'GREEN',
-        right: `${state.takeoffConfig.rwyCondition}>`,
+        right: windCompStr,
         rightColor: 'GREEN',
       },
       {
-        labelLeft: 'AFE LIMIT',
-        labelRight: 'VNAV CAP AFE',
-        left: `${state.altitude.afeLimitFt}FT`,
-        leftColor: 'GREEN',
-        right: `${state.altitude.vnavCaptureAfeFt}FT`,
-        rightColor: 'GREEN',
+        right: 'SEND REQST>',
+        rightColor: 'WHITE',
       },
-      {},
       {
         left: '<PERF INIT',
         leftColor: 'WHITE',
-        right: 'TAKEOFF VSPEEDS>',
+        right: 'NEXT PAGE>',
         rightColor: 'WHITE',
       },
+    ],
+  };
+}
+
+export function buildTakeoffFlapsPage(): McduScreenLayout {
+  return {
+    title: 'TAKEOFF FLAPS',
+    pageNumber: '1/1',
+    rows: [
+      {
+        left: '<FLAP-1',
+        leftColor: 'GREEN',
+        right: 'RETURN>',
+        rightColor: 'WHITE',
+      },
+      {
+        left: '<FLAP-2',
+        leftColor: 'GREEN',
+      },
+      {
+        left: '<FLAP-3',
+        leftColor: 'GREEN',
+      },
+      {
+        left: '<FLAP-4',
+        leftColor: 'GREEN',
+      },
+      {},
+      {},
     ],
   };
 }
@@ -440,53 +541,100 @@ export function buildTakeoffVspeedsPage(state: FmsStoreState): McduScreenLayout 
   const ts = state.speeds.takeoffSpeeds;
   const vCheck = validateVSpeedsHierarchy(ts);
 
-  const fmtSpd = (val: number | null) => (val !== null ? `${val} KT` : '□□□ KT');
+  const fmtSpd = (val: number | null) => (val !== null ? `${val} KT` : '---');
+  const toPitchStr =
+    ts.v1 !== null ? `${(ts.toPitchDeg ?? 8.2).toFixed(1)}°` : '---';
 
   return {
-    title: 'TAKEOFF VSPEEDS',
-    pageNumber: '2/2',
+    title: 'TAKEOFF',
+    pageNumber: '1/1',
     rows: [
       {
         labelLeft: 'V1',
-        labelRight: 'FLAP',
         left: fmtSpd(ts.v1),
         leftColor: vCheck.v1Reverse ? 'WHITE' : 'GREEN',
         leftReverse: vCheck.v1Reverse,
+      },
+      {
+        labelLeft: 'VR',
+        labelRight: 'FLAPS',
+        left: fmtSpd(ts.vr),
+        leftColor: vCheck.vrReverse ? 'WHITE' : 'GREEN',
+        leftReverse: vCheck.vrReverse,
         right: `${state.takeoffConfig.flap}`,
         rightColor: 'GREEN',
       },
       {
-        labelLeft: 'VR',
+        labelLeft: 'V2',
         labelRight: 'PITCH TRIM',
-        left: fmtSpd(ts.vr),
-        leftColor: vCheck.vrReverse ? 'WHITE' : 'GREEN',
-        leftReverse: vCheck.vrReverse,
+        left: fmtSpd(ts.v2),
+        leftColor: vCheck.v2Reverse ? 'WHITE' : 'GREEN',
+        leftReverse: vCheck.v2Reverse,
         right: state.takeoffConfig.pitchTrim,
         rightColor: 'GREEN',
       },
       {
-        labelLeft: 'V2',
-        labelRight: 'TO FLEX',
-        left: fmtSpd(ts.v2),
-        leftColor: vCheck.v2Reverse ? 'WHITE' : 'GREEN',
-        leftReverse: vCheck.v2Reverse,
-        right: `${state.atmosphere.flexTemperatureC ?? 48}°C`,
-        rightColor: 'GREEN',
-      },
-      {
         labelLeft: 'VFS',
-        labelRight: 'TAKEOFF RSVD',
+        labelRight: 'TO PITCH',
         left: fmtSpd(ts.vfs),
         leftColor: vCheck.vfsReverse ? 'WHITE' : 'GREEN',
         leftReverse: vCheck.vfsReverse,
-        right: state.takeoffConfig.thrustMode,
+        right: toPitchStr,
+        rightColor: 'GREEN',
+      },
+      {
+        left: '<LANDING',
+        leftColor: 'WHITE',
+        right: 'CLIMB>',
+        rightColor: 'WHITE',
+      },
+      {
+        left: '<TO INIT',
+        leftColor: 'WHITE',
+        right: 'DEP LIM>',
+        rightColor: 'WHITE',
+      },
+    ],
+  };
+}
+
+export function buildDepartureLimitPage(state: FmsStoreState): McduScreenLayout {
+  const v2 = state.speeds.takeoffSpeeds.v2;
+  const spdLimStr =
+    state.altitude.departureSpeedLimit ??
+    (v2 !== null ? `${v2 + 10}` : 'V2+10');
+
+  return {
+    title: 'DEPARTURE LIMIT',
+    pageNumber: '1/1',
+    rows: [
+      {
+        labelLeft: 'SPEED LIMIT',
+        left: spdLimStr,
+        leftColor: 'GREEN',
+      },
+      {
+        labelLeft: 'AFE LIMIT',
+        left: `${state.altitude.afeLimitFt}`,
+        leftColor: 'GREEN',
+      },
+      {
+        labelLeft: 'VNAV CAP AFE',
+        left: `${state.altitude.vnavCaptureAfeFt}`,
+        leftColor: 'GREEN',
+      },
+      {
+        labelCenter: 'VNAV CAP<-EO->BANK LIM',
+        left: `${state.altitude.vnavCaptureEoAfeFt ?? 1000}`,
+        leftColor: 'GREEN',
+        right: `${state.altitude.eoBankLimitDeg ?? 15}°`,
         rightColor: 'GREEN',
       },
       {},
       {
-        left: '<TAKEOFF INIT',
+        left: '<TAKEOFF',
         leftColor: 'WHITE',
-        right: 'ACTIVE FLT PLAN>',
+        right: 'FLT PLAN>',
         rightColor: 'WHITE',
       },
     ],
