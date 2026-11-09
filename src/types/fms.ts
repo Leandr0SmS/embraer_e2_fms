@@ -1,6 +1,6 @@
 /**
  * Core TypeScript Data Models for the Embraer E2 Honeywell NG FMS (MC-860)
- * Based on Project Plan v3 & Scratchpad Syntax Specification Guide
+ * Updated for Phase 2 (Authentic Honeywell NG FMS Pilot's Guide & LATAM Guia Rápido)
  */
 
 export type McduColor = 'WHITE' | 'CYAN' | 'GREEN' | 'YELLOW' | 'MAGENTA' | 'AMBER';
@@ -13,13 +13,26 @@ export type LskId =
 export type FmsFunctionKey =
   | 'PERF'
   | 'NAV'
+  | 'PREV'
   | 'FPL'
   | 'PROG'
   | 'RTE'
-  | 'RADIO'
+  | 'CB'
+  | 'MENU'
+  | 'DLK'
+  | 'NEXT'
   | 'DIR'
-  | 'PREV'
-  | 'NEXT';
+  | 'TRS'
+  | 'RADIO';
+
+export type FlightPhase =
+  | 'PREFLIGHT'
+  | 'TAKEOFF'
+  | 'CLIMB'
+  | 'CRUISE'
+  | 'DESCENT'
+  | 'APPROACH'
+  | 'MISSED_APPROACH';
 
 export type McduPageId =
   | 'RADIO'
@@ -29,47 +42,63 @@ export type McduPageId =
   | 'ACTIVE_FLT_PLAN'
   | 'PERF_INDEX'
   | 'PERF_INIT'
+  | 'CRUISE_MODES'
+  | 'TO_DATASET'
   | 'TAKEOFF_INIT'
+  | 'TAKEOFF_FLAPS'
   | 'TAKEOFF_VSPEEDS'
+  | 'DEPARTURE_LIMIT'
   | 'NAV_INDEX'
   | 'PROGRESS'
   | 'CLIMB'
   | 'CRUISE'
   | 'DESCENT'
+  | 'LANDING_INIT'
+  | 'ROAAS'
   | 'LANDING'
   | 'DEPARTURE'
+  | 'DEPARTURE_RUNWAYS'
+  | 'DEPARTURE_SIDS'
+  | 'DEPARTURE_TRANS'
   | 'ARRIVAL'
+  | 'ARRIVAL_RUNWAYS'
+  | 'ARRIVAL_STARS'
+  | 'ARRIVAL_STAR_TRANS'
+  | 'ARRIVAL_APPROACH'
+  | 'ARRIVAL_APPR_TRANS'
   | 'HOLD'
   | 'FUEL_MGT'
-  | 'CONVERSION';
+  | 'CONVERSION'
+  | 'MISSED_APPROACH'
+  | 'ALTERNATE_FPL';
 
 /**
  * 4.1 Weight & Balance Data Model (FmsWeightData)
  */
 export interface FmsWeightData {
-  /** Zero Fuel Weight in thousands of kg (e.g. 42.5 for 42,500 kg). Uninitialized: null (renders as '□□.□') */
+  /** Zero Fuel Weight in thousands of kg (e.g. 40.0 for 40,000 kg). Uninitialized: null (renders as '□□□□□' on PERF INIT-KG 2/3) */
   zeroFuelWeight: number | null;
   /** Fuel Source selection: 'GAUGE' (synced with fuel sensing) or 'COMPUTED' (decremented by fuel flow) */
   fuelSource: 'GAUGE' | 'COMPUTED';
-  /** Total Fuel on Board in thousands of kg (e.g. 14.2 for 14,200 kg) */
+  /** Total Fuel on Board in thousands of kg (e.g. 7.6 for 7,600 kg or 14.2 for 14,200 kg) */
   fuelOnBoard: number;
-  /** Calculated Gross Weight = ZFW + FOB. Rendered in small cyan font */
+  /** Calculated Gross Weight = ZFW + FOB in thousands of kg (displayed as full KG e.g. 47600 on PERF INIT-KG 2/3) */
   grossWeight: number | null;
-  /** Takeoff Center of Gravity in % MAC (e.g. 24.5). Range: 10.0 to 40.0 % MAC. Uninitialized: null ('□□.□') */
+  /** Takeoff Center of Gravity in % MAC (e.g. 29.0). Range: 10.0 to 40.0 % MAC. Uninitialized: null ('□□.□%') */
   takeoffCg: number | null;
-  /** Fuel Reserve Value. Can be in minutes (e.g. 45) or absolute weight in thousands (e.g. 2.1 = 2,100 kg) */
+  /** Fuel Reserve Value. Can be in minutes (e.g. 30 or 45) or absolute weight in thousands (e.g. 2.1 = 2,100 kg) */
   fuelReserve: {
     mode: 'MINUTES' | 'WEIGHT';
     value: number;
   };
-  /** Alternate Fuel allowance in thousands (e.g. 1.2). If null, FMS calculates trip fuel to alternate */
+  /** Alternate Fuel allowance in thousands (e.g. 1.2). If null, FMS calculates trip fuel to alternate ('-----') */
   alternateFuel: number | null;
-  /** Takeoff / Landing Fuel Allowance in thousands (e.g. { takeoff: 0.4, landing: 0.2 }) */
+  /** Takeoff / Landing Fuel Allowance in KG (e.g. { takeoff: 0.142, landing: 0.105 } -> '142/105') */
   fuelAllowances: {
     takeoff: number;
     landing: number;
   };
-  /** Maximum certified Takeoff Weight in thousands of kg (E195-E2 default: 61.5t, configurable) */
+  /** Maximum certified Takeoff Weight in thousands of kg (E195-E2 default: 61.5t) */
   maxGrossWeight: number;
 }
 
@@ -89,16 +118,19 @@ export interface FmsSpeedData {
     vref: number | null;
     vapp: number | null;
     vac: number | null;
-    gaSpeed: number | null; // Go-Around target speed
+    gaSpeed: number | null; // Go-Around / VFS target speed
+    isCompPending?: boolean; // True when COMP reverse-video speeds await pilot confirmation
   };
   /** Active Flight Phase Speed Schedule */
   activeSchedule: {
     climbMode: 'ECON' | 'MAX_RATE' | 'MAX_ANGLE' | 'MANUAL';
-    climbCasMach: { cas: number; mach: number }; // e.g. { cas: 250, mach: 0.70 }
-    cruiseMode: 'ECON' | 'LRC' | 'MANUAL';
+    climbCasMach: { cas: number; mach: number }; // e.g. { cas: 252, mach: 0.65 }
+    cruiseMode: 'ECON' | 'LRC' | 'MAX_SPD' | 'MAX_END' | 'MXR_SPD' | 'MANUAL';
+    cruiseCasMach?: { cas: number; mach: number }; // e.g. { cas: 242, mach: 0.65 }
     cruiseMach: number;                         // e.g. 0.78
     descentMode: 'ECON' | 'MANUAL';
-    descentCasMach: { cas: number; mach: number };
+    descentCasMach: { cas: number; mach: number }; // e.g. { cas: 247, mach: 0.65 }
+    costIndex?: number;                            // e.g. 1 or 10
   };
   /** Airframe Speed Limits */
   limits: {
@@ -131,12 +163,13 @@ export interface FmsWaypoint {
   ident: string;                       // 5-7 char max (e.g. 'VEXIM', 'SBGR09L', '&LL01', '&PBD01')
   type: 'AIRPORT' | 'VOR' | 'NDB' | 'FIX' | 'LATLON' | 'PBD' | 'DISCONTINUITY';
   coordinates: { lat: number; lon: number };
-  viaAirway?: string;                  // e.g. 'DIRECT', 'J102', 'UZ1'
+  viaAirway?: string;                  // e.g. 'DIRECT', 'J44', 'SILOW4.RSK'
   constraint?: FmsWaypointConstraint;
   /** Computed Flight Progress Predictions */
   predictions: {
     etaUtc: string;                    // Format: 'HHMMz' (e.g. '1218z')
     dtgNm: number;                     // Distance to go from previous fix in NM
+    bearingDeg?: number;               // Magnetic course from previous fix (e.g. 8)
     cumulativeDtgNm: number;           // Total distance to destination in NM
     efobKg: number;                    // Estimated Fuel on Board in thousands (e.g. 13.8)
     predictedAltitudeFt: number;       // VNAV projected altitude
@@ -146,15 +179,20 @@ export interface FmsWaypoint {
 export interface FmsFlightPlan {
   id: string;
   planType: 'ACTIVE' | 'MOD' | 'SECONDARY';
-  origin: string;                      // Airport ICAO (e.g. 'SBGR')
-  destination: string;                 // Airport ICAO (e.g. 'SBRJ')
-  runway: string | null;               // e.g. '09L'
-  sid: string | null;                  // e.g. 'VEXIM1A'
-  star: string | null;                 // e.g. 'BUSPA1A'
-  approach: string | null;             // e.g. 'RNP 02R'
-  companyRoute: string | null;         // e.g. 'GRUJSD01'
-  alternate: string | null;            // Airport ICAO (e.g. 'SBGL')
-  flightId: string;                    // e.g. 'AZU1420'
+  origin: string;                      // Airport ICAO (e.g. 'SBGR' or 'KPHX')
+  destination: string;                 // Airport ICAO (e.g. 'SBCF' or 'KMSP')
+  runway: string | null;               // e.g. '10R' or '09L' or '08'
+  sid: string | null;                  // e.g. 'OMNI' or 'SILOW4'
+  sidTransition?: string | null;       // e.g. 'RSK'
+  star: string | null;                 // e.g. 'KASPR6'
+  starTransition?: string | null;      // e.g. 'MCW'
+  approach: string | null;             // e.g. 'ILS 30L'
+  approachTransition?: string | null;  // e.g. 'HASTI'
+  arrivalRunway?: string | null;       // e.g. '30L'
+  companyRoute: string | null;         // e.g. 'SBGR-SBCF'
+  alternate: string | null;            // Airport ICAO (e.g. 'SBGO' or 'KDLH')
+  alternateVia?: string | null;        // Waypoint on alternate route (e.g. 'GEP' or 'DIRECT')
+  flightId: string;                    // e.g. 'TAM3000' or 'AZU1420'
   lateralOffset: { side: 'L' | 'R'; distanceNm: number } | null;
   waypoints: FmsWaypoint[];
   activeWaypointIndex: number;         // Index of active TO waypoint
@@ -162,7 +200,6 @@ export interface FmsFlightPlan {
 
 /**
  * 4.4 Atmospheric, Wind & Temperature Model (FmsAtmosphericData)
- * Uses serializable Record<string, ...> instead of Map for clean persistence and scenario snapshots
  */
 export interface WaypointWindLayer {
   altitudeFt: number;
@@ -174,15 +211,16 @@ export interface WaypointWindLayer {
 export interface FmsAtmosphericData {
   /** Average Cruise Wind Direction (001-360 deg) and Speed (knots) */
   averageCruiseWind: { direction: number; speed: number } | null;
-  /** Surface Wind at Departure Airport */
+  /** Surface Wind at Departure Airport (null if unentered '□□□°/□□') */
   surfaceWind: { direction: number; speed: number };
-  /** Waypoint-Specific Winds Aloft (serializable Record keyed by waypoint ident) */
+  surfaceWindEntered?: boolean;
+  /** Waypoint-Specific Winds Aloft */
   waypointWinds: Record<string, WaypointWindLayer[]>;
-  /** Mean ISA Deviation in degrees Celsius (-80°C to +50°C). Default: 5 */
+  /** Mean ISA Deviation in degrees Celsius (-80°C to +50°C). Default: 0 */
   isaDeviationC: number;
   /** Outside Air Temperature at Airport/Surface in °C */
   surfaceOatC: number;
-  /** Flex Takeoff Assumed Temperature in °C (e.g. 48) */
+  /** Flex Takeoff Assumed Temperature in °C (e.g. 25 or 48) */
   flexTemperatureC: number | null;
   /** Altimeter setting */
   altimeter: {
@@ -201,14 +239,22 @@ export interface FmsAtmosphericData {
  * 4.5 Flight Level & Altitude Navigation Model (FmsAltitudeData)
  */
 export interface FmsAltitudeData {
-  /** Initial Cruise Altitude in Feet (e.g. 35000 for FL350). Uninitialized: null ('□□□□□') */
+  /** Initial Cruise Altitude in Feet (e.g. 40000 for FL400). Uninitialized: null ('□□□□□') */
   cruiseAltitudeFt: number | null;
+  /** Step Climb Increment in Feet (default 0) */
+  stepIncrementFt?: number;
   /** Transition Altitude in Feet. Default: NAV DB value or 18,000 FT */
   transitionAltitudeFt: number;
-  /** Above Field Elevation (AFE) Speed Transition Limit in Feet (e.g. 1500 FT) */
+  /** Above Field Elevation (AFE) Speed Transition Limit in Feet (e.g. 3000 FT) */
   afeLimitFt: number;
-  /** VNAV Capture Altitude AFE in Feet (e.g. 1000 FT) */
+  /** VNAV Capture Altitude AFE in Feet (e.g. 1000 FT or 400 FT) */
   vnavCaptureAfeFt: number;
+  /** VNAV Capture EO Altitude AFE in Feet (e.g. 1000 FT or 400 FT) */
+  vnavCaptureEoAfeFt?: number;
+  /** EO Bank Limit in degrees (default 15°) */
+  eoBankLimitDeg?: number;
+  /** Departure Speed Limit (default 'V2+10' or numeric KTS like 152) */
+  departureSpeedLimit?: string;
   /** Computed Optimum Cruise Altitude based on current Gross Weight */
   optimumAltitudeFt: number | null;
   /** Maximum Certified Ceiling Altitude (41,000 FT for Embraer E2) */
@@ -229,9 +275,6 @@ export interface ScratchpadMessage {
 
 /**
  * Strict 14x24 Character LCD Display Data Structures
- * - Line 1: Title Header & Page Index (e.g. "NAV IDENT 1/1")
- * - Lines 2..13: 6 LSK pairs (LSK 1..6), each consisting of a Small-Font Label Row + Data/Prompt Row
- * - Line 14: Scratchpad / Alert Message Buffer
  */
 export interface McduCell {
   char: string;
