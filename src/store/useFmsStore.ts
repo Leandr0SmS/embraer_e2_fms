@@ -332,6 +332,7 @@ export interface FmsStoreState {
   injectFaultScenario: (fault: FaultScenarioType) => void;
   resetToColdPreflight: () => void;
   resetToInitializedPreflight: () => void;
+  loadScenarioPreset: (scenario: 'LATAM_SBGR_SBCF' | 'HONEYWELL_KPHX_KMSP') => void;
 }
 
 export const useFmsStore = create<FmsStoreState>((set, get) => ({
@@ -2975,5 +2976,240 @@ export const useFmsStore = create<FmsStoreState>((set, get) => ({
       pendingAirway: null,
       flightPhase: 'PREFLIGHT',
     });
+  },
+
+  loadScenarioPreset: (scenario) => {
+    if (scenario === 'LATAM_SBGR_SBCF') {
+      const sbgr = NAV_AIRPORTS.SBGR;
+      const sbcf = NAV_AIRPORTS.SBCF;
+      const bco = NAV_FIXES.BCO ?? { lat: -22.8, lon: -45.5 };
+      const plan = computeFlightPlanPredictions(
+        {
+          id: 'LATAM-FPL-1',
+          planType: 'ACTIVE',
+          origin: 'SBGR',
+          destination: 'SBCF',
+          runway: '10R',
+          sid: 'OMNI',
+          star: null,
+          approach: 'ILS 16',
+          companyRoute: 'GRUCFZ01',
+          alternate: 'SBGO',
+          flightId: 'TAM3102',
+          lateralOffset: null,
+          activeWaypointIndex: 1,
+          waypoints: [
+            {
+              id: 'latam-0',
+              ident: 'SBGR',
+              type: 'AIRPORT',
+              coordinates: { lat: sbgr.lat, lon: sbgr.lon },
+              viaAirway: 'ORIGIN',
+              predictions: { etaUtc: '1214z', dtgNm: 0, cumulativeDtgNm: 0, efobKg: 14.2, predictedAltitudeFt: 2500 },
+            },
+            {
+              id: 'latam-1',
+              ident: 'BCO',
+              type: 'VOR',
+              coordinates: { lat: bco.lat, lon: bco.lon },
+              viaAirway: 'OMNI',
+              predictions: { etaUtc: '1225z', dtgNm: 45, cumulativeDtgNm: 45, efobKg: 13.4, predictedAltitudeFt: 18000 },
+            },
+            {
+              id: 'latam-2',
+              ident: 'SBCF',
+              type: 'AIRPORT',
+              coordinates: { lat: sbcf.lat, lon: sbcf.lon },
+              viaAirway: 'DIRECT',
+              predictions: { etaUtc: '1310z', dtgNm: 225, cumulativeDtgNm: 270, efobKg: 9.7, predictedAltitudeFt: 2700 },
+            },
+          ],
+        },
+        14.2,
+        40000,
+        0.78
+      );
+
+      set({
+        activePage: 'RADIO',
+        subPageIndex: 1,
+        hasVerifiedNavIdent: false,
+        positionInitialized: false,
+        loadedPosCoords: 'S23°26.1 W046°28.4',
+        perfInitConfirmed: false,
+        cgInvalidFlag: false,
+        engineOutMode: false,
+        scratchpadInput: '',
+        deleteMode: false,
+        messages: [],
+        flightPlan: plan,
+        modFlightPlan: null,
+        weights: {
+          zeroFuelWeight: null,
+          fuelSource: 'GAUGE',
+          fuelOnBoard: 14.2,
+          grossWeight: null,
+          takeoffCg: null,
+          fuelReserve: { mode: 'MINUTES', value: 45 },
+          alternateFuel: 1.5,
+          fuelAllowances: { takeoff: 0.4, landing: 0.2 },
+          maxGrossWeight: 61.5,
+        },
+        altitude: {
+          cruiseAltitudeFt: null,
+          transitionAltitudeFt: 8000,
+          afeLimitFt: 1500,
+          vnavCaptureAfeFt: 1000,
+          optimumAltitudeFt: 38000,
+          certifiedCeilingFt: 41000,
+        },
+        toDataset: {
+          thrustRating: 'TO-3',
+          toTempC: 25,
+          attcs: true,
+          refEcs: 'OFF',
+          refAntiIce: 'ALL',
+          flexTakeoff: true,
+          flexTempC: 42,
+          entered: false,
+        },
+        flightPhase: 'PREFLIGHT',
+        guidedStepIndex: 0,
+      });
+    } else {
+      const kphx = NAV_AIRPORTS.KPHX;
+      const kmsp = NAV_AIRPORTS.KMSP;
+      const rsk = NAV_FIXES.RSK;
+      const dvv = NAV_FIXES.DVV;
+      const onl = NAV_FIXES.ONL;
+      const mcw = NAV_FIXES.MCW;
+      const gep = NAV_FIXES.GEP;
+
+      const plan = computeFlightPlanPredictions(
+        {
+          id: 'HONEYWELL-FPL-1',
+          planType: 'ACTIVE',
+          origin: 'KPHX',
+          destination: 'KMSP',
+          runway: '08',
+          sid: 'SILOW4.RSK',
+          star: 'KASPR6.MCW',
+          approach: 'ILS 30L.HASTI',
+          companyRoute: 'PHXMSP01',
+          alternate: 'KDLH',
+          flightId: 'E190E2',
+          lateralOffset: null,
+          activeWaypointIndex: 1,
+          waypoints: [
+            {
+              id: 'hw-0',
+              ident: 'KPHX',
+              type: 'AIRPORT',
+              coordinates: { lat: kphx.lat, lon: kphx.lon },
+              viaAirway: 'ORIGIN',
+              predictions: { etaUtc: '1214z', dtgNm: 0, cumulativeDtgNm: 0, efobKg: 14.2, predictedAltitudeFt: 1100 },
+            },
+            {
+              id: 'hw-1',
+              ident: 'RSK',
+              type: 'VOR',
+              coordinates: { lat: rsk.lat, lon: rsk.lon },
+              viaAirway: 'SILOW4',
+              predictions: { etaUtc: '1245z', dtgNm: 210, cumulativeDtgNm: 210, efobKg: 11.2, predictedAltitudeFt: 33000 },
+            },
+            {
+              id: 'hw-2',
+              ident: 'DVV',
+              type: 'VOR',
+              coordinates: { lat: dvv.lat, lon: dvv.lon },
+              viaAirway: 'J44',
+              predictions: { etaUtc: '1325z', dtgNm: 260, cumulativeDtgNm: 470, efobKg: 8.1, predictedAltitudeFt: 33000 },
+            },
+            {
+              id: 'hw-3',
+              ident: 'ONL',
+              type: 'VOR',
+              coordinates: { lat: onl.lat, lon: onl.lon },
+              viaAirway: 'J114',
+              predictions: { etaUtc: '1410z', dtgNm: 295, cumulativeDtgNm: 765, efobKg: 5.0, predictedAltitudeFt: 33000 },
+            },
+            {
+              id: 'hw-4',
+              ident: 'MCW',
+              type: 'VOR',
+              coordinates: { lat: mcw.lat, lon: mcw.lon },
+              viaAirway: 'KASPR6',
+              predictions: { etaUtc: '1440z', dtgNm: 195, cumulativeDtgNm: 960, efobKg: 3.2, predictedAltitudeFt: 18000 },
+            },
+            {
+              id: 'hw-5',
+              ident: 'GEP',
+              type: 'VOR',
+              coordinates: { lat: gep.lat, lon: gep.lon },
+              viaAirway: 'KASPR6',
+              predictions: { etaUtc: '1458z', dtgNm: 110, cumulativeDtgNm: 1070, efobKg: 2.3, predictedAltitudeFt: 4000 },
+            },
+            {
+              id: 'hw-6',
+              ident: 'KMSP',
+              type: 'AIRPORT',
+              coordinates: { lat: kmsp.lat, lon: kmsp.lon },
+              viaAirway: 'ILS30L',
+              predictions: { etaUtc: '1505z', dtgNm: 15, cumulativeDtgNm: 1085, efobKg: 2.0, predictedAltitudeFt: 840 },
+            },
+          ],
+        },
+        14.2,
+        33000,
+        0.78
+      );
+
+      set({
+        activePage: 'RADIO',
+        subPageIndex: 1,
+        hasVerifiedNavIdent: false,
+        positionInitialized: false,
+        loadedPosCoords: 'N33°26.1 W112°00.7',
+        perfInitConfirmed: false,
+        cgInvalidFlag: false,
+        engineOutMode: false,
+        scratchpadInput: '',
+        deleteMode: false,
+        messages: [],
+        flightPlan: plan,
+        modFlightPlan: null,
+        weights: {
+          zeroFuelWeight: null,
+          fuelSource: 'GAUGE',
+          fuelOnBoard: 14.2,
+          grossWeight: null,
+          takeoffCg: null,
+          fuelReserve: { mode: 'MINUTES', value: 45 },
+          alternateFuel: 1.4,
+          fuelAllowances: { takeoff: 0.4, landing: 0.2 },
+          maxGrossWeight: 61.5,
+        },
+        altitude: {
+          cruiseAltitudeFt: null,
+          transitionAltitudeFt: 18000,
+          afeLimitFt: 1500,
+          vnavCaptureAfeFt: 1000,
+          optimumAltitudeFt: 35000,
+          certifiedCeilingFt: 41000,
+        },
+        toDataset: {
+          thrustRating: 'TO-1',
+          toTempC: 35,
+          attcs: true,
+          refEcs: 'ON',
+          refAntiIce: 'OFF',
+          flexTakeoff: true,
+          flexTempC: 45,
+          entered: false,
+        },
+        flightPhase: 'PREFLIGHT',
+        guidedStepIndex: 0,
+      });
+    }
   },
 }));

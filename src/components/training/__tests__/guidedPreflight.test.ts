@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { useFmsStore } from '../../../store/useFmsStore';
 import { evaluateGuidedSteps } from '../GuidedPreflightPanel';
 
-describe('Guided Preflight Sequence & Instructor Fault Scenarios (Step 10)', () => {
+describe('Guided Preflight Sequence & Instructor Fault Scenarios (Steps 10 & 17)', () => {
   beforeEach(() => {
     useFmsStore.getState().resetToColdPreflight();
   });
@@ -12,6 +12,7 @@ describe('Guided Preflight Sequence & Instructor Fault Scenarios (Step 10)', () 
 
     // Initially at Step 1 (RADIO page, 0 steps complete)
     let steps = evaluateGuidedSteps(useFmsStore.getState());
+    expect(steps).toHaveLength(10);
     expect(steps.filter((s) => s.isComplete).length).toBe(0);
 
     // Step 1: Press NAV function key -> opens NAV IDENT 1/1
@@ -24,34 +25,48 @@ describe('Guided Preflight Sequence & Instructor Fault Scenarios (Step 10)', () 
     useFmsStore.getState().pressLsk('3R');
     expect(useFmsStore.getState().positionInitialized).toBe(true);
 
-    // Step 3: Press 6R (RTE>) -> opens ACT RTE 1/3, then 6L (<PERF INIT)
+    // Step 3: Press 6R (RTE>) -> opens ACT RTE 1/3
     useFmsStore.getState().pressLsk('6R');
     expect(useFmsStore.getState().activePage).toBe('ACT_RTE');
-    useFmsStore.getState().pressLsk('6L');
+
+    // Step 4 & 5: Advance to ACT RTE 2/3, then press 6R (PERF INIT>)
+    useFmsStore.getState().pressFunctionKey('NEXT');
+    expect(useFmsStore.getState().subPageIndex).toBe(2);
+    useFmsStore.getState().pressLsk('6R');
     expect(useFmsStore.getState().activePage).toBe('PERF_INIT');
 
-    // Step 4: Advance to PERF INIT 2/3, enter CRZ ALT (280), ZFW (37.6), CG (24.5), confirm (6L)
+    // Step 6: Advance to PERF INIT 2/3, enter CRZ ALT (280), ZFW (40000), CG (29.0), confirm (6L)
     useFmsStore.getState().pressLsk('6R');
     expect(useFmsStore.getState().subPageIndex).toBe(2);
 
     useFmsStore.getState().setScratchpadInput('280');
     useFmsStore.getState().pressLsk('1L');
-    useFmsStore.getState().setScratchpadInput('37.6');
-    useFmsStore.getState().pressLsk('2R');
-    useFmsStore.getState().setScratchpadInput('24.5');
-    useFmsStore.getState().pressLsk('4L');
+    useFmsStore.getState().setScratchpadInput('40000');
+    useFmsStore.getState().pressLsk('3R');
+    useFmsStore.getState().setScratchpadInput('29.0');
+    useFmsStore.getState().pressLsk('5L');
     useFmsStore.getState().pressLsk('6L'); // <CONFIRM INIT
     expect(useFmsStore.getState().perfInitConfirmed).toBe(true);
 
-    // Step 5: Push 6R (TAKEOFF INIT>) -> opens TAKEOFF INIT 1/2, push 6R (NEXT PAGE>) -> 2/2, push 6R (TAKEOFF>)
+    // Step 7: Advance to PERF INIT 3/3, then push 6R (TO DATASET>)
+    useFmsStore.getState().pressFunctionKey('NEXT');
+    expect(useFmsStore.getState().subPageIndex).toBe(3);
+    useFmsStore.getState().pressLsk('6R');
+    expect(useFmsStore.getState().activePage).toBe('TO_DATASET');
+
+    // Step 8: Push 5L (■ENTER) on T/O DATASET MENU 1/1, then 6R (FMS TAKEOFF>)
+    useFmsStore.getState().pressLsk('5L');
+    expect(useFmsStore.getState().toDataset.entered).toBe(true);
     useFmsStore.getState().pressLsk('6R');
     expect(useFmsStore.getState().activePage).toBe('TAKEOFF_INIT');
+
+    // Step 9: Push 6R (NEXT PAGE>) -> TAKEOFF INIT 2/2, push 6R (TAKEOFF>)
     useFmsStore.getState().pressLsk('6R');
     expect(useFmsStore.getState().subPageIndex).toBe(2);
     useFmsStore.getState().pressLsk('6R');
     expect(useFmsStore.getState().activePage).toBe('TAKEOFF_VSPEEDS');
 
-    // Step 6: Push 6R (DEP LIM>) -> opens DEPARTURE LIMIT 1/1, then push 6R (FLT PLAN>) -> completes preflight
+    // Step 10: Push 6R (DEP LIM>) -> opens DEPARTURE LIMIT 1/1, then push 6R (FLT PLAN>) -> completes preflight
     useFmsStore.getState().pressLsk('6R');
     expect(useFmsStore.getState().activePage).toBe('DEPARTURE_LIMIT');
     useFmsStore.getState().pressLsk('6R');
@@ -59,6 +74,29 @@ describe('Guided Preflight Sequence & Instructor Fault Scenarios (Step 10)', () 
 
     steps = evaluateGuidedSteps(useFmsStore.getState());
     expect(steps.every((s) => s.isComplete)).toBe(true);
+  });
+
+  it('loads LATAM (SBGR -> SBCF) and Honeywell (KPHX -> KMSP) official guide scenario presets', () => {
+    const store = useFmsStore.getState();
+
+    store.loadScenarioPreset('LATAM_SBGR_SBCF');
+    let st = useFmsStore.getState();
+    expect(st.flightPlan.origin).toBe('SBGR');
+    expect(st.flightPlan.destination).toBe('SBCF');
+    expect(st.flightPlan.alternate).toBe('SBGO');
+    expect(st.flightPlan.runway).toBe('10R');
+    expect(st.flightPlan.sid).toBe('OMNI');
+    expect(st.toDataset.thrustRating).toBe('TO-3');
+
+    store.loadScenarioPreset('HONEYWELL_KPHX_KMSP');
+    st = useFmsStore.getState();
+    expect(st.flightPlan.origin).toBe('KPHX');
+    expect(st.flightPlan.destination).toBe('KMSP');
+    expect(st.flightPlan.alternate).toBe('KDLH');
+    expect(st.flightPlan.runway).toBe('08');
+    expect(st.flightPlan.sid).toBe('SILOW4.RSK');
+    expect(st.flightPlan.star).toBe('KASPR6.MCW');
+    expect(st.flightPlan.approach).toBe('ILS 30L.HASTI');
   });
 
   it('injects and recovers from Route Discontinuity fault using DEL key', () => {
