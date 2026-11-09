@@ -8,7 +8,7 @@ Built with **React 19**, **TypeScript**, **Zustand**, **Tailwind CSS v4**, and *
 
 ---
 
-## ✨ Key Features
+## Key Features
 
 ### 1. Authentic MC-860 Hardware Bezel & 14×24 LCD Display
 - **Strict 14 Rows × 24 Columns Character Grid**:
@@ -72,7 +72,7 @@ Built with **React 19**, **TypeScript**, **Zustand**, **Tailwind CSS v4**, and *
 
 ---
 
-## 🚀 Getting Started
+## Getting Started
 
 ### Prerequisites
 - **Node.js** `>= 18.x`
@@ -108,7 +108,7 @@ npm run preview
 
 ---
 
-## 🗂️ Project Structure
+## Project Structure
 
 ```text
 e2_fms/
@@ -147,6 +147,6 @@ e2_fms/
 
 ---
 
-## 📄 License
+## License
 
 This project is licensed under the **MIT License** — see the [LICENSE](LICENSE) file for details.
