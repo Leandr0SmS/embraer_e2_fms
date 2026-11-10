@@ -122,71 +122,97 @@ export const McduBezel: React.FC<McduBezelProps> = ({
       <CornerFastener className="absolute bottom-1.5 right-1.5 z-20" />
 
       {/* Upper Display Frame with Left LSK 1L..6L, Center Black LCD, and Right LSK 1R..6R */}
-      <div className="mx-3 mt-1">
-        {/* Top Sensor & Brand Bar */}
-        <div className="flex items-center justify-between px-3 mb-1.5">
-          <div className="flex items-center gap-2.5 pl-4">
-            {/* Left Green Light Sensor */}
+      <div className="mx-2 mt-0.5">
+        {/* Top Brand & Sensor Bar */}
+        <div className="grid grid-cols-[44px_1fr_44px] items-center mb-1">
+          {/* Left Green Light Sensor (aligned above Left LSK column) */}
+          <div className="flex justify-center pt-3">
             <span className="w-4 h-4 rounded-full bg-[#22c55e] border border-[#14532d] shadow-[inset_0_1px_2px_rgba(255,255,255,0.6),0_0_6px_rgba(34,197,94,0.6)] flex items-center justify-center">
               <span className="w-1.5 h-1.5 rounded-[1px] border border-[#14532d]/70" />
             </span>
-            <span className="text-[11px] font-semibold tracking-wide text-white/90 drop-shadow-[0_1px_1px_rgba(0,0,0,0.5)]">
-              Honeywell
-            </span>
           </div>
 
-          {/* Right Status Annunciators (MSG / OFST), Audio Mute & Right Green Light Sensor */}
-          <div className="flex items-center gap-1.5 pr-4">
-            {hasActiveMessage && (
-              <span className="px-1.5 py-0.5 rounded-[2px] text-[9px] font-bold tracking-wider bg-amber-400 text-black border border-black/40 animate-pulse">
-                MSG
-              </span>
-            )}
-            {hasLateralOffset && (
-              <span className="px-1.5 py-0.5 rounded-[2px] text-[9px] font-bold tracking-wider bg-cyan-300 text-black border border-black/40">
-                OFST
-              </span>
-            )}
-            <button
-              type="button"
-              onClick={toggleMute}
-              title={audioMuted ? 'Unmute Avionics Audio' : 'Mute Avionics Audio'}
-              className="p-0.5 rounded bg-black/25 hover:bg-black/40 text-white/90 border border-black/30 cursor-pointer"
-            >
-              {audioMuted ? (
-                <VolumeX className="w-3 h-3 text-rose-300" />
-              ) : (
-                <Volume2 className="w-3 h-3 text-emerald-300" />
+          {/* Honeywell Logo & Status Annunciators */}
+          <div className="flex items-center justify-between px-3">
+            <span className="text-[11px] font-bold tracking-wide text-white/90 drop-shadow-[0_1px_1px_rgba(0,0,0,0.45)]">
+              Honeywell
+            </span>
+
+            <div className="flex items-center gap-1.5">
+              {hasActiveMessage && (
+                <span className="px-1.5 py-0.5 rounded-[2px] text-[9px] font-bold tracking-wider bg-amber-400 text-black border border-black/40 animate-pulse">
+                  MSG
+                </span>
               )}
-            </button>
+              {hasLateralOffset && (
+                <span className="px-1.5 py-0.5 rounded-[2px] text-[9px] font-bold tracking-wider bg-cyan-300 text-black border border-black/40">
+                  OFST
+                </span>
+              )}
+              <button
+                type="button"
+                onClick={toggleMute}
+                title={audioMuted ? 'Unmute Avionics Audio' : 'Mute Avionics Audio'}
+                className="p-0.5 rounded bg-black/25 hover:bg-black/40 text-white/90 border border-black/30 cursor-pointer"
+              >
+                {audioMuted ? (
+                  <VolumeX className="w-3 h-3 text-rose-300" />
+                ) : (
+                  <Volume2 className="w-3 h-3 text-emerald-300" />
+                )}
+              </button>
+            </div>
+          </div>
+
+          {/* Right Green Light Sensor (aligned above Right LSK column) */}
+          <div className="flex justify-center pt-3">
             <span className="w-4 h-4 rounded-full bg-[#22c55e] border border-[#14532d] shadow-[inset_0_1px_2px_rgba(255,255,255,0.6),0_0_6px_rgba(34,197,94,0.6)] flex items-center justify-center">
               <span className="w-1.5 h-1.5 rounded-[1px] border border-[#14532d]/70" />
             </span>
           </div>
         </div>
 
-        {/* Display Grid & LSK Columns */}
-        <div className="grid grid-cols-[42px_1fr_42px] items-stretch">
+        {/* Display Grid & LSK Columns — Using identical 14-row grid geometry so 1L..6L and 1R..6R align 1:1 with Data Lines 3, 5, 7, 9, 11, 13 */}
+        <div className="grid grid-cols-[44px_1fr_44px] items-stretch">
           {/* Left LSK Column (1L - 6L) */}
-          <div className="flex flex-col justify-between pt-[26px] pb-[24px] pr-1 items-end">
-            {LEFT_LSKS.map((lsk) => {
+          <div
+            className="grid py-[18px] pr-1"
+            style={{ gridTemplateRows: 'repeat(14, minmax(0, 1fr))' }}
+          >
+            {LEFT_LSKS.map((lsk, idx) => {
               const isTarget = highlightedLsk === lsk;
+              const dataRow = 3 + idx * 2; // LCD Rows 3, 5, 7, 9, 11, 13 (1-based)
+              const labelRow = 2 + idx * 2; // LCD Rows 2, 4, 6, 8, 10, 12 (1-based)
               return (
-                <div key={lsk} className="w-full flex flex-col items-end">
-                  {/* Horizontal Guide Bar aligned with Label Line */}
-                  <div className="w-full h-[3px] bg-gradient-to-b from-[#d4d8dd] to-[#52565c] border-y border-[#2b2e33] rounded-l-full mb-1 -mr-1 z-10" />
-                  <button
-                    type="button"
-                    onClick={() => onLskPress(lsk)}
-                    title={`LSK ${lsk}`}
-                    data-testid={`lsk-${lsk}`}
-                    className={`mcdu-lsk-btn h-5 w-8 rounded-[3px] flex items-center justify-center cursor-pointer ${
-                      isTarget ? 'ring-2 ring-amber-400 animate-pulse' : ''
-                    }`}
+                <React.Fragment key={lsk}>
+                  {/* Horizontal Guide Tick Line between LSKs (on Label rows 4, 6, 8, 10, 12 as in Figure 3-1) */}
+                  {idx > 0 && (
+                    <div
+                      style={{ gridRow: labelRow }}
+                      className="w-full flex items-center justify-end"
+                    >
+                      <div className="w-4 h-[2.5px] bg-[#2b2e33] shadow-[0_1px_0_rgba(255,255,255,0.45)] -mr-1 z-10" />
+                    </div>
+                  )}
+
+                  {/* LSK Button centered directly on the Data Row */}
+                  <div
+                    style={{ gridRow: dataRow }}
+                    className="w-full flex items-center justify-center"
                   >
-                    <span className="w-4 h-[2.5px] bg-white rounded-full" />
-                  </button>
-                </div>
+                    <button
+                      type="button"
+                      onClick={() => onLskPress(lsk)}
+                      title={`LSK ${lsk}`}
+                      data-testid={`lsk-${lsk}`}
+                      className={`mcdu-lsk-btn h-[22px] w-[34px] rounded-[4px] flex items-center justify-center cursor-pointer ${
+                        isTarget ? 'ring-2 ring-amber-400 animate-pulse' : ''
+                      }`}
+                    >
+                      <span className="w-4 h-[2.5px] bg-white rounded-full" />
+                    </button>
+                  </div>
+                </React.Fragment>
               );
             })}
           </div>
@@ -202,25 +228,44 @@ export const McduBezel: React.FC<McduBezelProps> = ({
           </div>
 
           {/* Right LSK Column (1R - 6R) */}
-          <div className="flex flex-col justify-between pt-[26px] pb-[24px] pl-1 items-start">
-            {RIGHT_LSKS.map((lsk) => {
+          <div
+            className="grid py-[18px] pl-1"
+            style={{ gridTemplateRows: 'repeat(14, minmax(0, 1fr))' }}
+          >
+            {RIGHT_LSKS.map((lsk, idx) => {
               const isTarget = highlightedLsk === lsk;
+              const dataRow = 3 + idx * 2; // LCD Rows 3, 5, 7, 9, 11, 13 (1-based)
+              const labelRow = 2 + idx * 2; // LCD Rows 2, 4, 6, 8, 10, 12 (1-based)
               return (
-                <div key={lsk} className="w-full flex flex-col items-start">
-                  {/* Horizontal Guide Bar aligned with Label Line */}
-                  <div className="w-full h-[3px] bg-gradient-to-b from-[#d4d8dd] to-[#52565c] border-y border-[#2b2e33] rounded-r-full mb-1 -ml-1 z-10" />
-                  <button
-                    type="button"
-                    onClick={() => onLskPress(lsk)}
-                    title={`LSK ${lsk}`}
-                    data-testid={`lsk-${lsk}`}
-                    className={`mcdu-lsk-btn h-5 w-8 rounded-[3px] flex items-center justify-center cursor-pointer ${
-                      isTarget ? 'ring-2 ring-amber-400 animate-pulse' : ''
-                    }`}
+                <React.Fragment key={lsk}>
+                  {/* Horizontal Guide Tick Line between LSKs (on Label rows 4, 6, 8, 10, 12 as in Figure 3-1) */}
+                  {idx > 0 && (
+                    <div
+                      style={{ gridRow: labelRow }}
+                      className="w-full flex items-center justify-start"
+                    >
+                      <div className="w-4 h-[2.5px] bg-[#2b2e33] shadow-[0_1px_0_rgba(255,255,255,0.45)] -ml-1 z-10" />
+                    </div>
+                  )}
+
+                  {/* LSK Button centered directly on the Data Row */}
+                  <div
+                    style={{ gridRow: dataRow }}
+                    className="w-full flex items-center justify-center"
                   >
-                    <span className="w-4 h-[2.5px] bg-white rounded-full" />
-                  </button>
-                </div>
+                    <button
+                      type="button"
+                      onClick={() => onLskPress(lsk)}
+                      title={`LSK ${lsk}`}
+                      data-testid={`lsk-${lsk}`}
+                      className={`mcdu-lsk-btn h-[22px] w-[34px] rounded-[4px] flex items-center justify-center cursor-pointer ${
+                        isTarget ? 'ring-2 ring-amber-400 animate-pulse' : ''
+                      }`}
+                    >
+                      <span className="w-4 h-[2.5px] bg-white rounded-full" />
+                    </button>
+                  </div>
+                </React.Fragment>
               );
             })}
           </div>
