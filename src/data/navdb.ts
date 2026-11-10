@@ -53,39 +53,120 @@ export interface NavCompanyRoute {
   waypoints: string[];
 }
 
+export interface NavDatabaseEntry {
+  id: string;
+  name: string;
+  cycle: string;
+  activeDates: string;
+  inactiveDates: string;
+  ndbVersion: string;
+  partNumber: string;
+  subPartNumber: string;
+  softwareLoad: string;
+}
+
+const MCDU_MONTHS = [
+  'JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN',
+  'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC',
+];
+
+export function formatCurrentMcduDate(now = new Date()): string {
+  const dd = String(now.getDate()).padStart(2, '0');
+  const mmm = MCDU_MONTHS[now.getMonth()] ?? 'JAN';
+  const yy = String(now.getFullYear()).slice(-2);
+  return `${dd}${mmm}${yy}`;
+}
+
+export function formatCurrentMcduUtc(now = new Date()): string {
+  const hh = String(now.getUTCHours()).padStart(2, '0');
+  const mm = String(now.getUTCMinutes()).padStart(2, '0');
+  return `${hh}${mm}z`;
+}
+
+export const NAV_DATABASES: Record<string, NavDatabaseEntry> = {
+  NDB_2405_LATAM: {
+    id: 'NDB_2405_LATAM',
+    name: 'Honeywell NG FMS South America / Global (AIRAC 2405)',
+    cycle: 'AIRAC 2405',
+    activeDates: '20APR 18MAY/23',
+    inactiveDates: '26JAN 23FEB/23>',
+    ndbVersion: 'NDB V2.08 23M',
+    partNumber: 'H3652304001',
+    subPartNumber: 'DS31908001',
+    softwareLoad: 'NG 1.0',
+  },
+  NDB_2406_NEXT: {
+    id: 'NDB_2406_NEXT',
+    name: 'Honeywell NG FMS Next Cycle (AIRAC 2406)',
+    cycle: 'AIRAC 2406',
+    activeDates: '26JAN 23FEB/23',
+    inactiveDates: '20APR 18MAY/23>',
+    ndbVersion: 'NDB V2.08 23M',
+    partNumber: 'H3652304002',
+    subPartNumber: 'DS31908001',
+    softwareLoad: 'NG 1.0',
+  },
+};
+
 export const AIRAC_METADATA = {
-  cycle: 'AIRAC 2405',
-  date: '19MAY26',
-  utc: '0041z',
-  activeDates: '20APR 18MAY/23',
-  inactiveDates: '26JAN 23FEB/23>',
-  ndbVersion: 'NDB V2.08 23M',
-  partNumber: 'H3652304001',
-  subPartNumber: 'DS31908001',
-  softwareLoad: 'NG 1.0',
+  cycle: NAV_DATABASES.NDB_2405_LATAM.cycle,
+  get date(): string {
+    return formatCurrentMcduDate();
+  },
+  get utc(): string {
+    return formatCurrentMcduUtc();
+  },
+  activeDates: NAV_DATABASES.NDB_2405_LATAM.activeDates,
+  inactiveDates: NAV_DATABASES.NDB_2405_LATAM.inactiveDates,
+  ndbVersion: NAV_DATABASES.NDB_2405_LATAM.ndbVersion,
+  partNumber: NAV_DATABASES.NDB_2405_LATAM.partNumber,
+  subPartNumber: NAV_DATABASES.NDB_2405_LATAM.subPartNumber,
+  softwareLoad: NAV_DATABASES.NDB_2405_LATAM.softwareLoad,
   aircraftModel: 'E195-E2',
   engines: 'PW1900G',
 };
 
 export const NAV_AIRPORTS: Record<string, NavAirport> = {
+  LOWW: {
+    icao: 'LOWW',
+    name: 'VIENNA INTL',
+    lat: 48.1103,
+    lon: 16.5697,
+    elevationFt: 600,
+    transitionAltFt: 10000,
+    runways: [
+      { ident: '11', headingDeg: 112, elevationFt: 590, slopePercent: 0.0, lengthMeters: 3500, lat: 48.118, lon: 16.551 },
+      { ident: '16', headingDeg: 164, elevationFt: 600, slopePercent: 0.0, lengthMeters: 3600, lat: 48.122, lon: 16.578 },
+    ],
+    sids: {},
+    stars: {},
+    approaches: ['ILS 11', 'ILS 16'],
+  },
   SBGR: {
     icao: 'SBGR',
     name: 'SAO PAULO/GUARULHOS',
     lat: -23.4356,
     lon: -46.4731,
-    elevationFt: 2459,
+    elevationFt: 2450,
     transitionAltFt: 8000,
     runways: [
+      { ident: '10L', headingDeg: 95, elevationFt: 2450, slopePercent: 0.0, lengthMeters: 3700, lat: -23.4319, lon: -46.4695 },
+      { ident: '10R', headingDeg: 95, elevationFt: 2450, slopePercent: 0.0, lengthMeters: 3000, lat: -23.4392, lon: -46.4765 },
+      { ident: '28L', headingDeg: 275, elevationFt: 2450, slopePercent: 0.0, lengthMeters: 3000, lat: -23.4375, lon: -46.4475 },
+      { ident: '28R', headingDeg: 275, elevationFt: 2450, slopePercent: 0.0, lengthMeters: 3700, lat: -23.4301, lon: -46.4338 },
       { ident: '09L', headingDeg: 93, elevationFt: 2459, slopePercent: 0.2, lengthMeters: 3700, lat: -23.4319, lon: -46.4695 },
       { ident: '09R', headingDeg: 93, elevationFt: 2450, slopePercent: 0.1, lengthMeters: 3000, lat: -23.4392, lon: -46.4765 },
-      { ident: '10R', headingDeg: 95, elevationFt: 2450, slopePercent: 0.0, lengthMeters: 3000, lat: -23.4392, lon: -46.4765 },
-      { ident: '10L', headingDeg: 95, elevationFt: 2459, slopePercent: 0.1, lengthMeters: 3700, lat: -23.4319, lon: -46.4695 },
       { ident: '27L', headingDeg: 273, elevationFt: 2454, slopePercent: -0.1, lengthMeters: 3000, lat: -23.4375, lon: -46.4475 },
       { ident: '27R', headingDeg: 273, elevationFt: 2463, slopePercent: -0.2, lengthMeters: 3700, lat: -23.4301, lon: -46.4338 },
-      { ident: '28L', headingDeg: 275, elevationFt: 2454, slopePercent: 0.0, lengthMeters: 3000, lat: -23.4375, lon: -46.4475 },
     ],
     sids: {
-      OMNI: ['VEXIM'],
+      CGO1A: ['VEXIM'],
+      EDLU1A: ['VEXIM'],
+      NIBR1A: ['BCO'],
+      OMNI: ['MANUAL'],
+      REOR1A: ['BCO'],
+      UKBE1D: ['VEXIM'],
+      UREM1A: ['BCO'],
       VEXIM1A: ['VEXIM', 'BCO'],
       CPN2A: ['CPN', 'VEXIM'],
     },
@@ -297,6 +378,7 @@ export const NAV_FIXES: Record<string, NavFix> = {
   UGRA:  { ident: 'UGRA',  type: 'FIX', lat: -23.1920, lon: -45.2110 },
   POXIM: { ident: 'POXIM', type: 'FIX', lat: -22.9810, lon: -44.1150 },
   OPOR:  { ident: 'OPOR',  type: 'FIX', lat: -20.4120, lon: -44.5210 },
+  MANUAL: { ident: 'MANUAL', type: 'FIX', lat: -23.4392, lon: -46.3900 },
 
   // US Fixes & VORs from Honeywell NG FMS E2 Pilot's Guide & Scratchpad Guide
   SILOW: { ident: 'SILOW', type: 'FIX', lat: 33.6120, lon: -111.5840 },

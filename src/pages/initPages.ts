@@ -5,7 +5,7 @@
  * - POSITION INIT 1/1 (Page 2 Spec)
  */
 
-import { AIRAC_METADATA } from '../data/navdb';
+import { AIRAC_METADATA, NAV_DATABASES } from '../data/navdb';
 import { FmsStoreState } from '../store/useFmsStore';
 import { McduScreenLayout } from '../types/fms';
 
@@ -64,6 +64,10 @@ export function buildRadioPage(state: FmsStoreState): McduScreenLayout {
 }
 
 export function buildNavIdentPage(state: FmsStoreState): McduScreenLayout {
+  const db =
+    NAV_DATABASES[state.activeNavDbId ?? 'NDB_2405_LATAM'] ??
+    NAV_DATABASES.NDB_2405_LATAM;
+
   return {
     title: 'NAV IDENT',
     pageNumber: '1/1',
@@ -72,28 +76,29 @@ export function buildNavIdentPage(state: FmsStoreState): McduScreenLayout {
         labelLeft: 'DATE',
         labelRight: 'ACTIVE NDB',
         left: AIRAC_METADATA.date,
-        leftColor: 'GREEN',
-        right: AIRAC_METADATA.activeDates,
-        rightColor: 'GREEN',
+        leftColor: 'CYAN',
+        right: db.activeDates,
+        rightColor: 'YELLOW',
       },
       {
         labelLeft: 'UTC',
         labelRight: 'NON-ACTIVE NDB',
         left: AIRAC_METADATA.utc,
-        leftColor: 'GREEN',
-        right: AIRAC_METADATA.inactiveDates,
-        rightColor: 'CYAN',
+        leftColor: 'CYAN',
+        right: db.inactiveDates,
+        rightColor: 'YELLOW',
       },
       {
         labelLeft: 'SW',
-        labelRight: AIRAC_METADATA.ndbVersion,
-        left: AIRAC_METADATA.softwareLoad,
-        leftColor: 'CYAN',
-        right: AIRAC_METADATA.partNumber,
-        rightColor: 'CYAN',
+        labelRight: db.ndbVersion,
+        labelRightColor: 'GREEN',
+        left: db.softwareLoad,
+        leftColor: 'GREEN',
+        right: db.partNumber,
+        rightColor: 'GREEN',
       },
       {
-        right: AIRAC_METADATA.subPartNumber,
+        right: db.subPartNumber,
         rightColor: 'CYAN',
         rightSize: 'SMALL',
       },

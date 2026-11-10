@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
+import { AIRAC_METADATA, NAV_DATABASES } from '../../data/navdb';
 import { useFmsStore } from '../../store/useFmsStore';
 import {
   buildNavIdentPage,
@@ -6,7 +7,7 @@ import {
   buildRadioPage,
 } from '../initPages';
 
-describe('Power-Up & Initialization Pages (Step 6)', () => {
+describe('Power-Up & Initialization Pages (Step 6 & Step 18)', () => {
   beforeEach(() => {
     useFmsStore.getState().resetToColdPreflight();
   });
@@ -18,19 +19,32 @@ describe('Power-Up & Initialization Pages (Step 6)', () => {
     expect(layout.rows[5].right).toBe('NAV IDENT>');
   });
 
-  it('builds NAV IDENT 1/1 with reverse video POS INIT> when position is uninitialized and RTE> when initialized', () => {
+  it('builds NAV IDENT 1/1 with dynamic today date/UTC, selectable NAV_DATABASES from navdb.ts, and POS INIT> / RTE>', () => {
     const coldState = useFmsStore.getState();
     const layoutCold = buildNavIdentPage(coldState);
     expect(layoutCold.title).toBe('NAV IDENT');
-    expect(layoutCold.rows[0].left).toBe('19MAY26');
-    expect(layoutCold.rows[0].right).toBe('20APR 18MAY/23');
-    expect(layoutCold.rows[1].left).toBe('0041z');
-    expect(layoutCold.rows[1].right).toBe('26JAN 23FEB/23>');
+    expect(layoutCold.rows[0].left).toBe(AIRAC_METADATA.date);
+    expect(layoutCold.rows[0].leftColor).toBe('CYAN');
+    expect(layoutCold.rows[0].right).toBe(NAV_DATABASES.NDB_2405_LATAM.activeDates);
+    expect(layoutCold.rows[0].rightColor).toBe('YELLOW');
+    expect(layoutCold.rows[1].left).toBe(AIRAC_METADATA.utc);
+    expect(layoutCold.rows[1].leftColor).toBe('CYAN');
+    expect(layoutCold.rows[1].right).toBe(NAV_DATABASES.NDB_2405_LATAM.inactiveDates);
+    expect(layoutCold.rows[1].rightColor).toBe('YELLOW');
     expect(layoutCold.rows[2].left).toBe('NG 1.0');
+    expect(layoutCold.rows[2].leftColor).toBe('GREEN');
     expect(layoutCold.rows[2].right).toBe('H3652304001');
+    expect(layoutCold.rows[2].rightColor).toBe('GREEN');
     expect(layoutCold.rows[4].left).toBe('<LDG IDENT');
     expect(layoutCold.rows[5].right).toBe('POS INIT>');
     expect(layoutCold.rows[5].rightReverse).toBe(true);
+
+    // Pressing 2R swaps active/non-active navigation database from navdb.ts
+    useFmsStore.getState().navigateToPage('NAV_IDENT', 1);
+    useFmsStore.getState().pressLsk('2R');
+    expect(useFmsStore.getState().activeNavDbId).toBe('NDB_2406_NEXT');
+    const swappedLayout = buildNavIdentPage(useFmsStore.getState());
+    expect(swappedLayout.rows[0].right).toBe(NAV_DATABASES.NDB_2406_NEXT.activeDates);
 
     // Once position is initialized, 6R shows RTE> and reverse video clears
     useFmsStore.getState().resetToInitializedPreflight();

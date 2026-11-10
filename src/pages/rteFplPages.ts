@@ -85,7 +85,7 @@ export function buildActRtePage(state: FmsStoreState): McduScreenLayout {
       ? plan.runway.startsWith('RW')
         ? plan.runway
         : plan.runway
-      : '---';
+      : '';
 
     return {
       title: isMod ? 'MOD RTE' : 'ACT RTE',
@@ -96,9 +96,9 @@ export function buildActRtePage(state: FmsStoreState): McduScreenLayout {
           labelLeft: 'ORIGIN',
           labelRight: 'DEST',
           left: plan.origin || '□□□□',
-          leftColor: 'GREEN',
+          leftColor: plan.origin ? 'GREEN' : 'CYAN',
           right: plan.destination || '□□□□□',
-          rightColor: hasDest ? 'GREEN' : 'CYAN',
+          rightColor: hasDest ? (isMod ? 'CYAN' : 'GREEN') : 'GREEN',
         },
         {
           labelLeft: 'RUNWAY',
@@ -106,19 +106,19 @@ export function buildActRtePage(state: FmsStoreState): McduScreenLayout {
           left: rwyDisplay,
           leftColor: 'GREEN',
           right: hasDest ? plan.alternate || '-----' : '',
-          rightColor: plan.alternate ? 'GREEN' : 'CYAN',
+          rightColor: plan.alternate ? (isMod ? 'CYAN' : 'GREEN') : 'GREEN',
         },
         {
-          labelLeft: 'FPL REQST',
           labelRight: 'CO ROUTE',
           left: '<DLK FPL',
           leftColor: 'WHITE',
           right:
             plan.companyRoute ||
             (hasDest ? `${plan.origin}-${plan.destination}` : '--------'),
-          rightColor: plan.companyRoute || hasDest ? 'GREEN' : 'CYAN',
+          rightColor: plan.companyRoute ? 'GREEN' : hasDest ? 'WHITE' : 'GREEN',
         },
         {
+          labelLeft: 'FPL REQST',
           labelRight: 'FPL REPORT',
           left: hasDest ? '<SEND' : '',
           leftColor: 'WHITE',
@@ -129,7 +129,7 @@ export function buildActRtePage(state: FmsStoreState): McduScreenLayout {
           left: offsetLabel,
           leftColor: plan.lateralOffset ? 'GREEN' : 'WHITE',
           right: plan.flightId || '--------',
-          rightColor: plan.flightId ? 'GREEN' : 'CYAN',
+          rightColor: plan.flightId ? (isMod ? 'WHITE' : 'GREEN') : 'GREEN',
         },
         isMod
           ? {
@@ -137,7 +137,6 @@ export function buildActRtePage(state: FmsStoreState): McduScreenLayout {
               leftColor: 'WHITE',
               right: 'ACTIVATE>',
               rightColor: 'WHITE',
-              rightReverse: true,
             }
           : {
               left: '<FPL LIST',
@@ -182,7 +181,6 @@ export function buildActRtePage(state: FmsStoreState): McduScreenLayout {
               leftColor: 'WHITE',
               right: 'ACTIVATE>',
               rightColor: 'WHITE',
-              rightReverse: true,
             }
           : {
               left: '<ARRIVAL',
@@ -235,13 +233,14 @@ export function buildActRtePage(state: FmsStoreState): McduScreenLayout {
         i++;
       }
     } else if (leg) {
+      const isHeadingManual = leg.via.startsWith('H') || leg.to === 'MANUAL';
       legRows.push({
         labelLeft: i === 0 ? 'VIA' : undefined,
         labelRight: i === 0 ? 'TO' : undefined,
         left: leg.via,
-        leftColor: 'GREEN',
+        leftColor: isHeadingManual ? 'CYAN' : 'GREEN',
         right: leg.to,
-        rightColor: 'GREEN',
+        rightColor: isHeadingManual ? 'CYAN' : 'GREEN',
       });
     } else {
       legRows.push({});
@@ -264,7 +263,6 @@ export function buildActRtePage(state: FmsStoreState): McduScreenLayout {
             leftColor: 'WHITE',
             right: 'ACTIVATE>',
             rightColor: 'WHITE',
-            rightReverse: true,
           }
         : {
             left: '<ARRIVAL',
@@ -284,14 +282,17 @@ export function buildDeparturePages(state: FmsStoreState): McduScreenLayout {
 
   if (state.activePage === 'DEPARTURE_RUNWAYS') {
     const rwys = apt.runways;
+    const isSbgr = apt.icao === 'SBGR';
     const rows: McduLskRow[] = [];
     for (let i = 0; i < 5; i++) {
-      const leftRwy = rwys[i];
-      const rightRwy = rwys[i + 5];
+      // On SBGR (Page 8 of LATAM PDF), show the 4 main runways 10L, 10R, 28L, 28R on 1L..4L
+      const leftRwy = isSbgr ? (i < 4 ? rwys[i] : undefined) : rwys[i];
+      const rightRwy = isSbgr ? undefined : rwys[i + 5];
+      const rwyPrefix = isSbgr ? '' : 'RW';
       rows.push({
-        left: leftRwy ? `<RW${leftRwy.ident}` : undefined,
+        left: leftRwy ? `<${rwyPrefix}${leftRwy.ident}` : undefined,
         leftColor: 'GREEN',
-        right: rightRwy ? `RW${rightRwy.ident}>` : undefined,
+        right: rightRwy ? `${rwyPrefix}${rightRwy.ident}>` : undefined,
         rightColor: 'GREEN',
       });
     }
@@ -316,15 +317,21 @@ export function buildDeparturePages(state: FmsStoreState): McduScreenLayout {
   if (state.activePage === 'DEPARTURE_SIDS') {
     const sids = Object.keys(apt.sids);
     const selRwy = pending.runway ?? plan.runway ?? apt.runways[0]?.ident ?? '09L';
+    const hasTwoColumns = sids.length > 5;
     const rows: McduLskRow[] = [];
     for (let i = 0; i < 5; i++) {
       const sidName = sids[i];
+      const rightSid = hasTwoColumns && i < 2 ? sids[i + 5] : undefined;
       rows.push({
-        labelRight: i === 0 ? 'RUNWAY' : undefined,
+        labelRight: !hasTwoColumns && i === 0 ? 'RUNWAY' : undefined,
         left: sidName ? `<${sidName}` : undefined,
         leftColor: 'GREEN',
-        right: i === 0 ? `RW${selRwy.replace(/^RW/, '')}>` : undefined,
-        rightColor: 'CYAN',
+        right: rightSid
+          ? `${rightSid}>`
+          : !hasTwoColumns && i === 0
+            ? `RW${selRwy.replace(/^RW/, '')}>`
+            : undefined,
+        rightColor: rightSid ? 'GREEN' : 'CYAN',
       });
     }
     rows.push({

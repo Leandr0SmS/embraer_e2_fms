@@ -236,6 +236,7 @@ export interface FmsStoreState {
   messages: ScratchpadMessage[];
 
   // Aircraft & FMS Core State
+  activeNavDbId: string;
   tailNumber: string;
   perfFactorPercent: number;
   passengers: number;
@@ -345,6 +346,7 @@ export const useFmsStore = create<FmsStoreState>((set, get) => ({
   deleteMode: false,
   messages: [],
 
+  activeNavDbId: 'NDB_2405_LATAM',
   tailNumber: 'PR-E2A',
   perfFactorPercent: 0.0,
   passengers: 114,
@@ -738,7 +740,14 @@ export const useFmsStore = create<FmsStoreState>((set, get) => ({
     // 2. NAV IDENT 1/1
     // =========================================================================
     if (state.activePage === 'NAV_IDENT') {
-      if (lsk === '6R') {
+      if (lsk === '2R') {
+        const nextDb =
+          state.activeNavDbId === 'NDB_2405_LATAM'
+            ? 'NDB_2406_NEXT'
+            : 'NDB_2405_LATAM';
+        set({ activeNavDbId: nextDb });
+        soundEngine.playConfirmChime();
+      } else if (lsk === '6R') {
         set({
           activePage: state.positionInitialized ? 'ACT_RTE' : 'POS_INIT',
           subPageIndex: 1,
@@ -839,7 +848,11 @@ export const useFmsStore = create<FmsStoreState>((set, get) => ({
                 : [];
             const combinedIds = Array.from(new Set([...sidWptIds, ...transWptIds]));
             const viaLabel =
-              selSid && selTrans ? `${selSid}.${selTrans}` : selSid ?? 'DIRECT';
+              selSid === 'OMNI'
+                ? 'H095°'
+                : selSid && selTrans
+                  ? `${selSid}.${selTrans}`
+                  : selSid ?? 'DIRECT';
 
             const sidWpts: FmsWaypoint[] = combinedIds
               .map((id, idx) => {
@@ -945,29 +958,29 @@ export const useFmsStore = create<FmsStoreState>((set, get) => ({
           set({ activePage: 'DEPARTURE', subPageIndex: 1 });
           return;
         }
-        if (lsk === '1R') {
+        const sids = Object.keys(apt.sids);
+        const hasTwoColumns = sids.length > 5;
+        if (!hasTwoColumns && lsk === '1R') {
           set({ activePage: 'DEPARTURE_RUNWAYS', subPageIndex: 1 });
           return;
         }
         const rowIdx = parseInt(lsk[0], 10) - 1;
-        if (lsk[1] === 'L') {
-          const sids = Object.keys(apt.sids);
-          const chosenSid = sids[rowIdx];
-          if (chosenSid) {
-            const hasTransitions =
-              apt.sidTransitions &&
-              apt.sidTransitions[chosenSid] &&
-              Object.keys(apt.sidTransitions[chosenSid]).length > 0;
-            set({
-              pendingDeparture: {
-                ...pending,
-                sid: chosenSid,
-                transition: null,
-              },
-              activePage: hasTransitions ? 'DEPARTURE_TRANS' : 'DEPARTURE',
-              subPageIndex: 1,
-            });
-          }
+        const sidIdx = lsk[1] === 'R' ? rowIdx + 5 : rowIdx;
+        const chosenSid = sids[sidIdx];
+        if (chosenSid) {
+          const hasTransitions =
+            apt.sidTransitions &&
+            apt.sidTransitions[chosenSid] &&
+            Object.keys(apt.sidTransitions[chosenSid]).length > 0;
+          set({
+            pendingDeparture: {
+              ...pending,
+              sid: chosenSid,
+              transition: null,
+            },
+            activePage: hasTransitions ? 'DEPARTURE_TRANS' : 'DEPARTURE',
+            subPageIndex: 1,
+          });
         }
         return;
       }
@@ -1010,23 +1023,31 @@ export const useFmsStore = create<FmsStoreState>((set, get) => ({
             state.pushMessage('INVALID ENTRY', 'HIGH');
             return;
           }
-          const defaultRwy = apt.runways[0]?.ident ?? '09L';
-          const destWpt = plan.waypoints[plan.waypoints.length - 1];
+          const destWpt =
+            plan.destination && plan.waypoints.length > 1
+              ? plan.waypoints[plan.waypoints.length - 1]
+              : null;
           const updatedPlan = computeFlightPlanPredictions(
             {
               ...plan,
               origin: apt.icao,
-              runway: defaultRwy,
+              runway: '',
               sid: null,
               sidTransition: null,
               waypoints: [
                 {
                   id: `wpt-orig-${Date.now()}`,
-                  ident: `${apt.icao}${defaultRwy}`,
+                  ident: apt.icao,
                   type: 'AIRPORT',
                   coordinates: { lat: apt.lat, lon: apt.lon },
                   viaAirway: 'ORIGIN',
-                  predictions: plan.waypoints[0].predictions,
+                  predictions: plan.waypoints[0]?.predictions ?? {
+                    etaUtc: '1214z',
+                    dtgNm: 0,
+                    cumulativeDtgNm: 0,
+                    efobKg: state.weights.fuelOnBoard,
+                    predictedAltitudeFt: 2500,
+                  },
                 },
                 ...(destWpt ? [destWpt] : []),
               ],
@@ -2398,8 +2419,9 @@ export const useFmsStore = create<FmsStoreState>((set, get) => ({
         else if (lsk === '6L') set({ activePage: 'DEPARTURE', subPageIndex: 1 });
         else if (lsk === '6R') set({ activePage: 'ARRIVAL', subPageIndex: 1 });
       } else {
-        if (lsk === '2L' || lsk === '1L') set({ activePage: 'NAV_IDENT', subPageIndex: 1 });
-        else if (lsk === '1R') set({ activePage: 'POS_INIT', subPageIndex: 1 });
+        if (lsk === '2L' || lsk === '1L') {
+          set({ activePage: 'NAV_IDENT', subPageIndex: 1, hasVerifiedNavIdent: true });
+        } else if (lsk === '1R') set({ activePage: 'POS_INIT', subPageIndex: 1 });
         else if (lsk === '2R') set({ activePage: 'CONVERSION', subPageIndex: 1 });
       }
       return;
